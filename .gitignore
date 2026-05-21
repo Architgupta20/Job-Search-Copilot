@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Local data (resumes, PDFs, DB files)
+data/
+uploads/
+*.db
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+*.egg-info/
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Docker volumes
+postgres_data/
