@@ -1,36 +1,55 @@
 # Job Search Copilot
 
-Local-first tool for recruiters. Upload a resume once, then either **search a company** (people + job openings) or **tailor your resume to a job description** — without inventing experience.
+Local-first tool for recruiters. Upload a resume once, then either **search a company** (LinkedIn people + careers jobs) or **tailor your resume to a job description** — using only facts from your upload, nothing invented.
 
-Runs on your Mac at `http://localhost:3000`. Data stays on your machine.
+Runs on your Mac at **http://localhost:3000**. Data stays under `data/` on your machine (gitignored).
+
+**Repo:** https://github.com/Architgupta20/Job-Search-Copilot
 
 ---
 
 ## Features
 
-### Path A — Company name
+### Path A — Company search
 
-- Enter company name + target roles (AI Engineer, ML, Data Scientist, Data Analyst)
-- **People:** CEOs, Program Managers, Lead AI Engineers, directors, recruiters — **current employees only** (no SDE1 / junior ICs)
-- **Jobs:** matching roles from the company careers page (includes similar titles, e.g. GenAI Engineer)
-- Contact email/phone only when found, with confidence labels
+- Enter a company name and select **one or more job profiles** (23 roles: AI/ML, GenAI, LLM, Data, SWE, DevOps, PM, TPM, etc.)
+- **LinkedIn people:** up to **10 profiles per selected role** (e.g. ML Engineer + AI Engineer → up to 20 people)
+- **Jobs:** deep scan of the careers portal (company site + Greenhouse, Lever, Ashby, and related ATS pages)
+- Senior contacts only (leaders, recruiters) — not junior IC spam
+- Requires **`SERPAPI_API_KEY`** for best LinkedIn results
 
 ### Path B — Job description (JD)
 
 - Paste a full JD
-- Tailors resume using **only facts from your upload** (no false skills or employers)
-- ATS-style keyword score (supported keywords only)
-- Download tailored resume as **Word (.docx)** or plain text
-- **Best formatting:** upload resume as **DOCX** (not PDF)
+- **ATS score** with matched vs missing keywords (supported facts only)
+- **Suggested edits** in the UI (section, before/after, reason) — copy into **your own Word file**
+- **Editable draft** textarea + **Copy all**
+- Optional download: plain **.docx** or **.txt** (does not merge into your uploaded resume layout)
+- Upload resume as **DOCX** on home for easiest manual updates
+
+---
+
+## Architecture
+
+| Part | Port | Role |
+|------|------|------|
+| **Python agents** (`agents/`) | 8000 | Resume parse, company search, JD tailor, exports |
+| **Next.js UI** (`apps/web/`) | 3000 | UI + API proxy to Python |
+
+Both must be running. API keys live in **`apps/web/.env`** only.
 
 ---
 
 ## Prerequisites
 
-| Tool | Version |
-|------|---------|
+| Tool | Notes |
+|------|--------|
 | [Git](https://git-scm.com/) | any recent |
 | [Node.js](https://nodejs.org/) | 20 LTS |
+| [Python](https://www.python.org/) | 3.12 (or Anaconda) |
+| [Groq API key](https://console.groq.com/keys) | recommended for JD tailor |
+| [SerpAPI key](https://serpapi.com) | optional, better company people search |
+| [Ollama](https://ollama.com) | optional, local LLM (no API key) |
 
 ---
 
@@ -39,128 +58,167 @@ Runs on your Mac at `http://localhost:3000`. Data stays on your machine.
 ### 1. Clone
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/Job-Search-Copilot.git
+git clone https://github.com/Architgupta20/Job-Search-Copilot.git
 cd Job-Search-Copilot
 ```
 
-### 2. Install web app
+### 2. API keys
+
+```bash
+cp .env.example apps/web/.env
+```
+
+Edit **`apps/web/.env`** (never commit this file):
+
+```env
+LLM_PROVIDER=groq
+GROQ_API_KEY=gsk_your_key_here
+
+# Optional — LinkedIn people (10 per role)
+SERPAPI_API_KEY=your_serpapi_key
+```
+
+Test Groq key:
+
+```bash
+cd agents
+conda activate job-copilot   # or your venv
+python scripts/check_groq.py
+```
+
+Expect: `SUCCESS — Groq accepts this key.`
+
+### 3. Python agents (Terminal 1)
+
+**Conda (recommended on Mac with Anaconda):**
+
+```bash
+cd agents
+conda create -n job-copilot python=3.12 -y
+conda activate job-copilot
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+**Or venv:**
+
+```bash
+cd agents
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Check: http://127.0.0.1:8000/health → `{"status":"ok"}`
+
+### 4. Web UI (Terminal 2)
 
 ```bash
 cd apps/web
 npm install
-```
-
-### 3. Configure API keys
-
-```bash
-cp ../../.env.example .env
-# Or create apps/web/.env directly — see Environment variables below
-```
-
-Edit **`apps/web/.env`** (never commit this file).
-
-### 4. Run
-
-**Recommended — Python agents + web UI:**
-
-```bash
-# Terminal 1
-cd agents
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-
-# Terminal 2
-cd apps/web
 npm run dev
 ```
 
-Open **http://localhost:3000**. The web app requires Python agents on port 8000.
+Open **http://localhost:3000**
 
 ---
 
 ## Environment variables
 
-Create **`apps/web/.env`** (copy from `.env.example` at repo root).
+All in **`apps/web/.env`** (see `.env.example` at repo root).
 
-### Required for JD tailoring (pick one LLM)
+### JD tailor (Python agents — pick one)
 
-| Variable | Provider | Get key |
-|----------|----------|---------|
-| `LLM_PROVIDER=groq` + `GROQ_API_KEY` | **Groq** (recommended, free tier) | [console.groq.com/keys](https://console.groq.com/keys) |
-| `LLM_PROVIDER=ollama` + `OLLAMA_MODEL=llama3.2` | **Ollama** (local, no key) | [ollama.com](https://ollama.com) |
-| `LLM_PROVIDER=openrouter` + `OPENROUTER_API_KEY` | OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` | Anthropic | [console.anthropic.com](https://console.anthropic.com/) |
-| `LLM_PROVIDER=gemini` + `GEMINI_API_KEY` | Google Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| `LLM_PROVIDER=openai` + `OPENAI_API_KEY` | OpenAI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| Setup | Variables |
+|--------|-----------|
+| **Groq** (recommended) | `LLM_PROVIDER=groq`, `GROQ_API_KEY` |
+| **OpenAI** | `LLM_PROVIDER=openai`, `OPENAI_API_KEY` |
+| **Ollama** (local, free) | `LLM_PROVIDER=ollama`, `OLLAMA_MODEL=llama3.2` |
 
-If one provider hits quota, set `LLM_PROVIDER` to another or add a second key (Groq + Ollama are good fallbacks).
+Python agents do **not** use Gemini/OpenRouter directly — use Groq, OpenAI, or Ollama.
 
-### Optional — better company people search
+### Company search
 
 | Variable | Purpose |
 |----------|---------|
-| `SERPAPI_API_KEY` | LinkedIn people via SerpAPI — [serpapi.com](https://serpapi.com) |
+| `SERPAPI_API_KEY` | LinkedIn people via Google/SerpAPI |
 
-### Optional — Python agents URL
+### Optional
 
 | Variable | Purpose |
 |----------|---------|
-| `PYTHON_API_URL` | FastAPI agents base URL (default `http://127.0.0.1:8000`) |
+| `PYTHON_API_URL` | Default `http://127.0.0.1:8000` |
+| `GROQ_MODEL` | Default `llama-3.3-70b-versatile` |
+
+---
+
+## How to use
+
+1. **Home** — upload resume (DOCX preferred).
+2. **Company** — pick roles → search → open careers link + LinkedIn profiles by role.
+3. **JD** — paste description → get **ATS score** + suggestions → edit in UI → copy into your Word file (optional download).
+4. Re-upload on home to change resume file.
 
 ---
 
 ## Project structure
 
 ```
-Job-Search-copilot/
-├── agents/                # Python FastAPI agents (resume, company, JD)
-│   ├── app/               # Routers + services
-│   └── scripts/           # check_groq.py (API key test)
-├── apps/web/              # Next.js UI + API proxy
-│   ├── app/               # Pages + API routes
-│   ├── lib/               # python-api, session, types, roles
-│   └── .env               # Secrets (gitignored)
-├── data/                  # Local runs (gitignored)
+Job-Search-Copilot/
+├── agents/                 # FastAPI Python agents
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── env.py          # loads apps/web/.env
+│   │   ├── routers/
+│   │   └── services/       # company, jd, resume, llm
+│   └── scripts/
+│       └── check_groq.py
+├── apps/web/               # Next.js UI + API proxy
+│   ├── app/                # pages + API routes
+│   └── lib/                # python-api, types, roles, session
+├── data/                   # resumes & runs (gitignored)
 ├── Docs/
+│   ├── ARCHITECTURE.md
+│   ├── RECRUITER_SETUP.md
+│   └── STATUS.md
 └── .env.example
 ```
-
----
-
-## How to use
-
-1. **Upload resume** (DOCX preferred for download formatting)
-2. Choose:
-   - **Company name** → search people + careers jobs
-   - **Job description** → tailor + download Word file
-3. Re-upload resume on home to change file
 
 ---
 
 ## Development
 
 ```bash
-cd apps/web
-npm run dev      # http://localhost:3000
-npm run build    # production build
-npm run lint     # ESLint
+# Agents
+cd agents && conda activate job-copilot && uvicorn app.main:app --reload --port 8000
+
+# Web
+cd apps/web && npm run dev
+npm run build
+npm run lint
 ```
 
-## Privacy
-
-- Resumes and run outputs live under `data/` on your computer (gitignored)
-- Do **not** commit `.env` or API keys to GitHub
-- Each recruiter should use their own API keys in their own `.env`
+**Cursor/VS Code:** `.vscode/settings.json` disables auto-activate of a missing `agents/.venv`. Use `conda activate job-copilot` in the agents terminal.
 
 ---
 
-## Roadmap
+## Troubleshooting
 
-- [ ] Cold email draft on company results
-- [ ] Application history UI
-- [ ] Postgres persistence for runs
-- [ ] PDF download with original layout
+| Problem | Fix |
+|---------|-----|
+| `503` / start Python agents | Run uvicorn on port 8000 |
+| Groq `401 Invalid API Key` | New key in `apps/web/.env`, `python scripts/check_groq.py`, restart uvicorn |
+| `source .venv/bin/activate` fails | Use conda `job-copilot` or recreate venv |
+| No LinkedIn people | Add `SERPAPI_API_KEY` |
+| Few jobs found | Open careers portal link; some sites block scrapers |
+
+---
+
+## Privacy
+
+- Resumes and runs stay in local `data/` (gitignored)
+- Never commit `apps/web/.env` or API keys
+- Revoke keys if they were ever pasted in chat or committed by mistake
 
 ---
 
@@ -168,6 +226,7 @@ npm run lint     # ESLint
 
 - [Architecture](Docs/ARCHITECTURE.md)
 - [Recruiter setup](Docs/RECRUITER_SETUP.md)
+- [Status](Docs/STATUS.md)
 
 ---
 
