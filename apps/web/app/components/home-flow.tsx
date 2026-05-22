@@ -2,27 +2,33 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { clearResumeSession, saveResumeSession } from "@/lib/resume/session";
 
 type Step = "upload" | "choose-path";
+
+type UploadResult = {
+  id: string;
+  fileName: string;
+  claimCount: number;
+  contact: { name?: string; email?: string };
+};
 
 export function HomeFlow() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [fileName, setFileName] = useState<string | null>(null);
+  const [uploadMeta, setUploadMeta] = useState<UploadResult | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleFile(file: File | undefined) {
+  async function handleFile(file: File | undefined) {
     if (!file) return;
     setError(null);
 
-    const allowed = [
-      "application/pdf",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ];
     const ext = file.name.toLowerCase();
     const validExt = ext.endsWith(".pdf") || ext.endsWith(".docx");
 
-    if (!allowed.includes(file.type) && !validExt) {
+    if (!validExt) {
       setError("Please upload a PDF or DOCX resume.");
       return;
     }
@@ -32,8 +38,47 @@ export function HomeFlow() {
       return;
     }
 
+    setUploading(true);
     setFileName(file.name);
-    setStep("choose-path");
+
+    try {
+      const body = new FormData();
+      body.append("file", file);
+
+      const res = await fetch("/api/resume/upload", {
+        method: "POST",
+        body,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "Upload failed.");
+      }
+
+      saveResumeSession(data.id, data.fileName);
+      setUploadMeta({
+        id: data.id,
+        fileName: data.fileName,
+        claimCount: data.claimCount,
+        contact: data.contact ?? {},
+      });
+      setStep("choose-path");
+    } catch (e) {
+      setFileName(null);
+      setError(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function resetUpload() {
+    clearResumeSession();
+    setStep("upload");
+    setFileName(null);
+    setUploadMeta(null);
+    setError(null);
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   return (
@@ -53,7 +98,9 @@ export function HomeFlow() {
 
       {step === "upload" && (
         <section className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 shadow-sm">
-          <h2 className="text-lg font-medium text-zinc-900">Step 1 — Upload resume</h2>
+          <h2 className="text-lg font-medium text-zinc-900">
+            Step 1 — Upload resume
+          </h2>
           <p className="mt-1 text-sm text-zinc-500">
             DOCX recommended for best download formatting. PDF also supported.
           </p>
@@ -61,17 +108,19 @@ export function HomeFlow() {
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".pdf,.docx"
             className="hidden"
+            disabled={uploading}
             onChange={(e) => handleFile(e.target.files?.[0])}
           />
 
           <button
             type="button"
+            disabled={uploading}
             onClick={() => inputRef.current?.click()}
-            className="mt-6 w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-700"
+            className="mt-6 w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-70"
           >
-            Choose resume file
+            {uploading ? "Uploading & parsing…" : "Choose resume file"}
           </button>
 
           {error && (
@@ -82,24 +131,28 @@ export function HomeFlow() {
         </section>
       )}
 
-      {step === "choose-path" && (
+      {step === "choose-path" && uploadMeta && (
         <section className="space-y-6">
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            Resume ready: <span className="font-medium">{fileName}</span>
+            <p>
+              Saved: <span className="font-medium">{uploadMeta.fileName}</span>
+            </p>
+            <p className="mt-1 text-emerald-800">
+              Parsed {uploadMeta.claimCount} factual lines for tailoring
+              (nothing invented).
+            </p>
             <button
               type="button"
-              className="ml-3 underline hover:no-underline"
-              onClick={() => {
-                setStep("upload");
-                setFileName(null);
-                if (inputRef.current) inputRef.current.value = "";
-              }}
+              className="mt-2 underline hover:no-underline"
+              onClick={resetUpload}
             >
               Change file
             </button>
           </div>
 
-          <h2 className="text-lg font-medium text-zinc-900">Step 2 — Choose path</h2>
+          <h2 className="text-lg font-medium text-zinc-900">
+            Step 2 — Choose path
+          </h2>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Link
