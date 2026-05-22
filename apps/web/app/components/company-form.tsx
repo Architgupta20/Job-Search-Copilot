@@ -1,30 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import type { CompanyRunResult } from "@/lib/company/types";
-import { PEOPLE_PER_ROLE, TARGET_ROLES } from "@/lib/company/roles";
-import { getResumeSession } from "@/lib/resume/session";
-
-function ConfidenceBadge({ value }: { value: string }) {
-  const styles: Record<string, string> = {
-    verified: "bg-emerald-100 text-emerald-800",
-    likely: "bg-amber-100 text-amber-900",
-    not_found: "bg-zinc-100 text-zinc-600",
-  };
-  return (
-    <span
-      className={`rounded px-1.5 py-0.5 text-xs font-medium ${styles[value] ?? styles.not_found}`}
-    >
-      {value.replace("_", " ")}
-    </span>
-  );
-}
+import { JobOpeningCard } from "@/app/components/job-opening-card";
+import { PersonCard } from "@/app/components/person-card";
+import { downloadCompanyResultsCsv } from "@/lib/company/export-csv";
+import { PEOPLE_PER_ROLE, ROLE_GROUPS } from "@/lib/company/roles";
+import { getResumeSession, useResumeSession } from "@/lib/resume/session";
 
 export function CompanyForm() {
+  const resumeSession = useResumeSession();
+  const rolesRef = useRef<HTMLFieldSetElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CompanyRunResult | null>(null);
+
+  function setAllRoles(checked: boolean) {
+    rolesRef.current
+      ?.querySelectorAll<HTMLInputElement>('input[name="roles"]')
+      .forEach((el) => {
+        el.checked = checked;
+      });
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -32,11 +30,6 @@ export function CompanyForm() {
     setResult(null);
 
     const session = getResumeSession();
-    if (!session) {
-      setError("Upload a resume on the home page first.");
-      return;
-    }
-
     const form = new FormData(e.currentTarget);
     const companyName = String(form.get("company") ?? "").trim();
     const roles = form.getAll("roles").map(String);
@@ -56,7 +49,7 @@ export function CompanyForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          resumeId: session.id,
+          resumeId: session?.id ?? null,
           companyName,
           targetRoles: roles,
         }),
@@ -81,11 +74,22 @@ export function CompanyForm() {
           Company search
         </h1>
         <p className="mt-2 text-zinc-600">
-          <strong>People:</strong> up to {PEOPLE_PER_ROLE} LinkedIn profiles{" "}
-          <em>per role</em> you select. <strong>Jobs:</strong> deep scan of the
-          careers portal (Greenhouse, Lever, ATS pages).
+          <strong>People:</strong> up to {PEOPLE_PER_ROLE} <strong>senior</strong>{" "}
+          LinkedIn profiles per role you pick — only that role or close equivalents
+          (e.g. AI Engineer → ML / GenAI / Head of AI). Ranked Director / Head /
+          Principal first. <strong>Jobs:</strong> careers portal is found automatically
+          (company site, Greenhouse, Lever). ATS % and tailoring need a resume on home.
         </p>
       </div>
+
+      {!resumeSession && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Link href="/" className="font-medium underline">
+            Upload your resume
+          </Link>{" "}
+          on the home page to see ATS scores and tailor for each job.
+        </p>
+      )}
 
       <form
         onSubmit={onSubmit}
@@ -108,22 +112,48 @@ export function CompanyForm() {
           />
         </div>
 
-        <fieldset>
+        <fieldset ref={rolesRef}>
           <legend className="text-sm font-medium text-zinc-800">
-            Job roles ({TARGET_ROLES.length} profiles — select all that apply)
+            Job roles (optional filters)
           </legend>
           <p className="mt-1 text-xs text-zinc-500">
-            2 roles selected → up to {PEOPLE_PER_ROLE * 2} people
+            Pick <strong>one or more</strong> — only 1 role is enough. Each role
+            adds up to {PEOPLE_PER_ROLE} LinkedIn people (3 roles → up to 30).
           </p>
-          <div className="mt-3 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
-            {TARGET_ROLES.map((role) => (
-              <label
-                key={role}
-                className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50"
-              >
-                <input type="checkbox" name="roles" value={role} />
-                {role}
-              </label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setAllRoles(true)}
+              className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium hover:bg-zinc-50"
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              onClick={() => setAllRoles(false)}
+              className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium hover:bg-zinc-50"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="mt-3 max-h-80 space-y-4 overflow-y-auto">
+            {Object.entries(ROLE_GROUPS).map(([group, roles]) => (
+              <div key={group}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  {group}
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {roles.map((role) => (
+                    <label
+                      key={role}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50"
+                    >
+                      <input type="checkbox" name="roles" value={role} />
+                      {role}
+                    </label>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </fieldset>
@@ -145,6 +175,16 @@ export function CompanyForm() {
 
       {result && (
         <div className="space-y-8">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => downloadCompanyResultsCsv(result)}
+              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50"
+            >
+              Download CSV
+            </button>
+          </div>
+
           {result.warnings.length > 0 && (
             <ul className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               {result.warnings.map((w) => (
@@ -185,23 +225,11 @@ export function CompanyForm() {
                       </h3>
                       <ul className="mt-2 divide-y divide-zinc-100">
                         {list.map((p) => (
-                          <li
+                          <PersonCard
                             key={`${role}-${p.linkedinUrl ?? p.name}`}
-                            className="py-3"
-                          >
-                            <p className="font-medium text-zinc-900">{p.name}</p>
-                            <p className="text-sm text-zinc-600">{p.title}</p>
-                            {p.linkedinUrl && (
-                              <a
-                                href={p.linkedinUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-1 inline-block text-sm text-emerald-700 underline"
-                              >
-                                LinkedIn
-                              </a>
-                            )}
-                          </li>
+                            person={p}
+                            companyName={result.company.name}
+                          />
                         ))}
                       </ul>
                     </div>
@@ -213,27 +241,11 @@ export function CompanyForm() {
             ) : (
               <ul className="mt-4 divide-y divide-zinc-100">
                 {result.people.map((p) => (
-                  <li key={`${p.name}-${p.title}`} className="py-4 first:pt-0">
-                    <p className="font-medium text-zinc-900">
-                      {p.name}
-                      {p.matchedRole && (
-                        <span className="ml-2 text-xs font-normal text-emerald-700">
-                          ({p.matchedRole})
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-sm text-zinc-600">{p.title}</p>
-                    {p.linkedinUrl && (
-                      <a
-                        href={p.linkedinUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-block text-sm text-emerald-700 underline"
-                      >
-                        LinkedIn
-                      </a>
-                    )}
-                  </li>
+                  <PersonCard
+                    key={`${p.name}-${p.title}`}
+                    person={p}
+                    companyName={result.company.name}
+                  />
                 ))}
               </ul>
             )}
@@ -243,42 +255,23 @@ export function CompanyForm() {
             <h2 className="text-lg font-semibold text-zinc-900">
               Job openings ({result.jobs.length})
             </h2>
-            {result.jobsByRole && (
-              <div className="mt-4 space-y-4">
-                {Object.entries(result.jobsByRole).map(([role, list]) =>
-                  list.length > 0 ? (
-                    <div key={role}>
-                      <h3 className="text-sm font-semibold text-zinc-800">
-                        {role} ({list.length})
-                      </h3>
-                      <ul className="mt-2 space-y-2">
-                        {list.map((j) => (
-                          <li
-                            key={j.url}
-                            className="rounded-lg border border-zinc-100 px-3 py-2"
-                          >
-                            <a
-                              href={j.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-medium text-emerald-800 underline"
-                            >
-                              {j.title}
-                            </a>
-                            {j.snippet && (
-                              <p className="mt-1 text-xs text-zinc-500 line-clamp-2">
-                                {j.snippet}
-                              </p>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null,
-                )}
-              </div>
+            {!result.resumeAttached && (
+              <p className="mt-2 text-sm text-amber-800">
+                Upload a resume to see ATS scores and tailor buttons.
+              </p>
             )}
-            {result.jobs.length === 0 && (
+            {result.jobs.length > 0 ? (
+              <ul className="mt-4 space-y-3">
+                {[...result.jobs]
+                  .sort(
+                    (a, b) =>
+                      (b.atsScorePercent ?? -1) - (a.atsScorePercent ?? -1),
+                  )
+                  .map((j) => (
+                    <JobOpeningCard key={j.url} job={j} />
+                  ))}
+              </ul>
+            ) : (
               <p className="mt-2 text-sm text-zinc-500">
                 No matching roles on careers portal — open the link above manually.
               </p>

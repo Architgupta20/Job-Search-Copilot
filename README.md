@@ -12,9 +12,13 @@ Runs on your Mac at **http://localhost:3000**. Data stays under `data/` on your 
 
 ### Path A — Company search
 
-- Enter a company name and select **one or more job profiles** (23 roles: AI/ML, GenAI, LLM, Data, SWE, DevOps, PM, TPM, etc.)
+- Enter a company name and select **one or more job profiles** (tech, product, leadership, and business roles)
 - **LinkedIn people:** up to **10 profiles per selected role** (e.g. ML Engineer + AI Engineer → up to 20 people)
-- **Jobs:** deep scan of the careers portal (company site + Greenhouse, Lever, Ashby, and related ATS pages)
+- **Draft cold email** per contact (uses resume facts when uploaded)
+- **Download CSV** of people + jobs
+- **Careers portal auto-detect** (company site, Greenhouse, Lever, Ashby via crawl + search)
+- **Jobs:** openings **only for that company** (careers site + their Greenhouse/Lever board — random job boards filtered out)
+- **ATS %** and **Tailor my resume** per job when a resume is uploaded
 - Senior contacts only (leaders, recruiters) — not junior IC spam
 - Requires **`SERPAPI_API_KEY`** for best LinkedIn results
 
@@ -36,7 +40,7 @@ Runs on your Mac at **http://localhost:3000**. Data stays under `data/` on your 
 | **Python agents** (`agents/`) | 8000 | Resume parse, company search, JD tailor, exports |
 | **Next.js UI** (`apps/web/`) | 3000 | UI + API proxy to Python |
 
-Both must be running. API keys live in **`apps/web/.env`** only.
+Both must be running (or use **`npm run dev`** from repo root — see below). API keys live in **`apps/web/.env`** only.
 
 ---
 
@@ -88,7 +92,20 @@ python scripts/check_groq.py
 
 Expect: `SUCCESS — Groq accepts this key.`
 
-### 3. Python agents (Terminal 1)
+### 3. Run both servers (one command)
+
+From repo root (with `job-copilot` conda env and `apps/web` dependencies installed):
+
+```bash
+conda activate job-copilot
+npm run dev
+```
+
+This starts agents on **8000** and the web UI on **3000**. Stop with `Ctrl+C`.
+
+### 3b. Or run separately
+
+**Python agents (Terminal 1)**
 
 **Conda (recommended on Mac with Anaconda):**
 
@@ -155,7 +172,7 @@ Python agents do **not** use Gemini/OpenRouter directly — use Groq, OpenAI, or
 ## How to use
 
 1. **Home** — upload resume (DOCX preferred).
-2. **Company** — pick roles → search → open careers link + LinkedIn profiles by role.
+2. **Company** — pick roles → optional careers URL → search → CSV export, cold emails, ATS/tailor per job.
 3. **JD** — paste description → get **ATS score** + suggestions → edit in UI → copy into your Word file (optional download).
 4. Re-upload on home to change resume file.
 
@@ -189,13 +206,12 @@ Job-Search-Copilot/
 ## Development
 
 ```bash
-# Agents
-cd agents && conda activate job-copilot && uvicorn app.main:app --reload --port 8000
+# Both (from repo root)
+conda activate job-copilot && npm run dev
 
-# Web
-cd apps/web && npm run dev
-npm run build
-npm run lint
+# Or separately
+cd agents && conda activate job-copilot && uvicorn app.main:app --reload --port 8000
+cd apps/web && npm run dev && npm run build && npm run lint
 ```
 
 **Cursor/VS Code:** `.vscode/settings.json` disables auto-activate of a missing `agents/.venv`. Use `conda activate job-copilot` in the agents terminal.

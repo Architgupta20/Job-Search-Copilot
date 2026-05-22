@@ -159,6 +159,18 @@ async def llm_json_completion(system: str, user_payload: dict[str, Any]) -> dict
                 "Groq rejected your API key (401). Save a NEW key in apps/web/.env with nano, "
                 "or switch to Ollama: LLM_PROVIDER=ollama (see README). Details: " + body
             ) from e
+        if provider == "groq" and (
+            e.response.status_code == 400
+            and (
+                "organization_restricted" in body
+                or "Organization has been restricted" in body
+            )
+        ):
+            raise ValueError(
+                "Groq restricted your account (organization_restricted). "
+                "Open https://console.groq.com and contact Groq support, or switch LLM in apps/web/.env: "
+                "LLM_PROVIDER=ollama (free, local) or LLM_PROVIDER=openai with OPENAI_API_KEY."
+            ) from e
         raise ValueError(f"LLM API error ({e.response.status_code}): {body}") from e
     except httpx.RequestError as e:
         raise ValueError(f"LLM request failed: {e}") from e

@@ -1,3 +1,5 @@
+import type { AtsBreakdown, JDTailorResult } from "@/lib/jd/types";
+
 export type ContactConfidence = "verified" | "likely" | "not_found";
 
 export type CompanyInfo = {
@@ -16,6 +18,15 @@ export type PersonResult = {
   phoneConfidence: ContactConfidence;
   source: string;
   matchedRole?: string;
+  contactHints?: string[];
+};
+
+export type ColdOutreachDraft = {
+  subject: string;
+  body: string;
+  linkedInMessage: string;
+  warning?: string;
+  source?: string;
 };
 
 export type JobResult = {
@@ -25,6 +36,8 @@ export type JobResult = {
   snippet: string | null;
   matchScore: number;
   matchedRole?: string | null;
+  atsScorePercent?: number | null;
+  atsBreakdown?: AtsBreakdown | null;
 };
 
 export type CompanyRunResult = {
@@ -35,5 +48,11 @@ export type CompanyRunResult = {
   jobs: JobResult[];
   jobsByRole?: Record<string, JobResult[]>;
   peoplePerRole?: number;
+  resumeAttached?: boolean;
   warnings: string[];
+};
+
+export type JobTailorResult = JDTailorResult & {
+  sourceJobUrl?: string;
+  sourceJobTitle?: string;
 };

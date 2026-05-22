@@ -18,11 +18,13 @@ export type JDTailorResult = {
   resumeId: string;
   jdTitle: string | null;
   tailoredText: string;
-  suggestedEdits: SuggestedEdit[];
+  suggestedEdits?: SuggestedEdit[];
   keywordsUsed: string[];
   keywordsSkipped: string[];
   atsScorePercent: number;
   atsBreakdown: AtsBreakdown;
   changeSummary: string[];
   warnings: string[];
+  sourceJobUrl?: string;
+  sourceJobTitle?: string;
 };

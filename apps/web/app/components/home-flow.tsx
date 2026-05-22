@@ -163,8 +163,8 @@ export function HomeFlow() {
                 Company name
               </h3>
               <p className="mt-2 text-sm text-zinc-600">
-                Top people to cold email plus AI/ML/Data job openings on their
-                careers portal.
+                LinkedIn people + job openings for this company. No resume
+                upload required — pick one or more roles.
               </p>
             </Link>
 
