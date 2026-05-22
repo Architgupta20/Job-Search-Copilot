@@ -87,8 +87,8 @@ export function CompanyForm() {
           Company search
         </h1>
         <p className="mt-2 text-zinc-600">
-          <strong>People:</strong> CEOs, Program Managers, Lead AI Engineers,
-          directors, recruiters — not SDE1 / junior ICs.{" "}
+          <strong>People:</strong> current employees only (CEO, Lead, PM,
+          recruiters) — not other companies.{" "}
           <strong>Jobs:</strong> openings for the roles you select below.
         </p>
       </div>
@@ -124,12 +124,7 @@ export function CompanyForm() {
                 key={role}
                 className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50"
               >
-                <input
-                  type="checkbox"
-                  name="roles"
-                  value={role}
-                  defaultChecked={role === "AI Engineer"}
-                />
+                <input type="checkbox" name="roles" value={role} />
                 {role}
               </label>
             ))}

@@ -6,7 +6,7 @@ import {
 } from "@/lib/python-api";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const AGENTS_HINT =
   "Start Python agents: cd agents && source .venv/bin/activate && uvicorn app.main:app --reload --port 8000";
@@ -14,8 +14,8 @@ const AGENTS_HINT =
 export async function POST(request: Request) {
   const body = await request.json();
   const resumeId = body.resumeId as string | undefined;
-  const companyName = body.companyName as string | undefined;
-  const targetRoles = body.targetRoles as string[] | undefined;
+  const jdText = body.jdText as string | undefined;
+  const confirmed = body.confirmed as boolean | undefined;
 
   if (!resumeId) {
     return NextResponse.json(
@@ -24,16 +24,16 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!companyName?.trim()) {
+  if (!jdText?.trim() || jdText.trim().length < 80) {
     return NextResponse.json(
-      { error: "companyName is required." },
+      { error: "Paste a job description (at least 80 characters)." },
       { status: 400 },
     );
   }
 
-  if (!targetRoles?.length) {
+  if (!confirmed) {
     return NextResponse.json(
-      { error: "Select at least one target role." },
+      { error: "Please confirm your resume information is accurate." },
       { status: 400 },
     );
   }
@@ -42,10 +42,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: AGENTS_HINT }, { status: 503 });
   }
 
-  const proxied = await proxyJsonPost("/api/company/run", {
+  const proxied = await proxyJsonPost("/api/jd/run", {
     resumeId,
-    companyName: companyName.trim(),
-    targetRoles,
+    jdText: jdText.trim(),
+    confirmed: true,
   });
   if (!proxied) {
     return NextResponse.json(
