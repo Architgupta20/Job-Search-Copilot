@@ -3,14 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import type { CompanyRunResult } from "@/lib/company/types";
+import { PEOPLE_PER_ROLE, TARGET_ROLES } from "@/lib/company/roles";
 import { getResumeSession } from "@/lib/resume/session";
-
-const TARGET_ROLES = [
-  "AI Engineer",
-  "ML Engineer",
-  "Data Scientist",
-  "Data Analyst",
-] as const;
 
 function ConfidenceBadge({ value }: { value: string }) {
   const styles: Record<string, string> = {
@@ -87,9 +81,9 @@ export function CompanyForm() {
           Company search
         </h1>
         <p className="mt-2 text-zinc-600">
-          <strong>People:</strong> current employees only (CEO, Lead, PM,
-          recruiters) — not other companies.{" "}
-          <strong>Jobs:</strong> openings for the roles you select below.
+          <strong>People:</strong> up to {PEOPLE_PER_ROLE} LinkedIn profiles{" "}
+          <em>per role</em> you select. <strong>Jobs:</strong> deep scan of the
+          careers portal (Greenhouse, Lever, ATS pages).
         </p>
       </div>
 
@@ -116,9 +110,12 @@ export function CompanyForm() {
 
         <fieldset>
           <legend className="text-sm font-medium text-zinc-800">
-            Job roles (careers page only)
+            Job roles ({TARGET_ROLES.length} profiles — select all that apply)
           </legend>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <p className="mt-1 text-xs text-zinc-500">
+            2 roles selected → up to {PEOPLE_PER_ROLE * 2} people
+          </p>
+          <div className="mt-3 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
             {TARGET_ROLES.map((role) => (
               <label
                 key={role}
@@ -136,7 +133,7 @@ export function CompanyForm() {
           disabled={loading}
           className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-70"
         >
-          {loading ? "Searching… (may take 30s)" : "Search company"}
+          {loading ? "Searching careers portal… (30–90s)" : "Search company"}
         </button>
 
         {error && (
@@ -166,37 +163,66 @@ export function CompanyForm() {
                 href={result.company.careersUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-1 inline-block text-sm text-emerald-700 underline"
+                className="mt-1 inline-block text-sm font-medium text-emerald-700 underline"
               >
-                Careers page
+                Open careers portal →
               </a>
             )}
           </section>
 
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-zinc-900">
-              People ({result.people.length})
+              People ({result.people.length}) —{" "}
+              {result.peoplePerRole ?? PEOPLE_PER_ROLE} per role
             </h2>
-            {result.people.length === 0 ? (
-              <p className="mt-2 text-sm text-zinc-500">
-                No people found. Try SerpAPI key or a different company name.
-              </p>
+            {result.peopleByRole && Object.keys(result.peopleByRole).length > 0 ? (
+              <div className="mt-4 space-y-6">
+                {Object.entries(result.peopleByRole).map(([role, list]) =>
+                  list.length > 0 ? (
+                    <div key={role}>
+                      <h3 className="text-sm font-semibold text-emerald-800">
+                        {role} ({list.length})
+                      </h3>
+                      <ul className="mt-2 divide-y divide-zinc-100">
+                        {list.map((p) => (
+                          <li
+                            key={`${role}-${p.linkedinUrl ?? p.name}`}
+                            className="py-3"
+                          >
+                            <p className="font-medium text-zinc-900">{p.name}</p>
+                            <p className="text-sm text-zinc-600">{p.title}</p>
+                            {p.linkedinUrl && (
+                              <a
+                                href={p.linkedinUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-1 inline-block text-sm text-emerald-700 underline"
+                              >
+                                LinkedIn
+                              </a>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            ) : result.people.length === 0 ? (
+              <p className="mt-2 text-sm text-zinc-500">No people found.</p>
             ) : (
               <ul className="mt-4 divide-y divide-zinc-100">
                 {result.people.map((p) => (
                   <li key={`${p.name}-${p.title}`} className="py-4 first:pt-0">
-                    <p className="font-medium text-zinc-900">{p.name}</p>
+                    <p className="font-medium text-zinc-900">
+                      {p.name}
+                      {p.matchedRole && (
+                        <span className="ml-2 text-xs font-normal text-emerald-700">
+                          ({p.matchedRole})
+                        </span>
+                      )}
+                    </p>
                     <p className="text-sm text-zinc-600">{p.title}</p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                      <span>
-                        Email: {p.email ?? "—"}{" "}
-                        <ConfidenceBadge value={p.emailConfidence} />
-                      </span>
-                      <span>
-                        Phone: {p.phone ?? "—"}{" "}
-                        <ConfidenceBadge value={p.phoneConfidence} />
-                      </span>
-                    </div>
                     {p.linkedinUrl && (
                       <a
                         href={p.linkedinUrl}
@@ -207,7 +233,6 @@ export function CompanyForm() {
                         LinkedIn
                       </a>
                     )}
-                    <p className="mt-1 text-xs text-zinc-400">{p.source}</p>
                   </li>
                 ))}
               </ul>
@@ -218,31 +243,45 @@ export function CompanyForm() {
             <h2 className="text-lg font-semibold text-zinc-900">
               Job openings ({result.jobs.length})
             </h2>
-            {result.jobs.length === 0 ? (
+            {result.jobsByRole && (
+              <div className="mt-4 space-y-4">
+                {Object.entries(result.jobsByRole).map(([role, list]) =>
+                  list.length > 0 ? (
+                    <div key={role}>
+                      <h3 className="text-sm font-semibold text-zinc-800">
+                        {role} ({list.length})
+                      </h3>
+                      <ul className="mt-2 space-y-2">
+                        {list.map((j) => (
+                          <li
+                            key={j.url}
+                            className="rounded-lg border border-zinc-100 px-3 py-2"
+                          >
+                            <a
+                              href={j.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-emerald-800 underline"
+                            >
+                              {j.title}
+                            </a>
+                            {j.snippet && (
+                              <p className="mt-1 text-xs text-zinc-500 line-clamp-2">
+                                {j.snippet}
+                              </p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            )}
+            {result.jobs.length === 0 && (
               <p className="mt-2 text-sm text-zinc-500">
-                No matching roles found on careers page.
+                No matching roles on careers portal — open the link above manually.
               </p>
-            ) : (
-              <ul className="mt-4 space-y-3">
-                {result.jobs.map((j) => (
-                  <li
-                    key={j.url}
-                    className="rounded-lg border border-zinc-100 px-3 py-2"
-                  >
-                    <a
-                      href={j.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-emerald-800 underline"
-                    >
-                      {j.title}
-                    </a>
-                    <p className="text-xs text-zinc-500">
-                      Match score: {j.matchScore}
-                    </p>
-                  </li>
-                ))}
-              </ul>
             )}
           </section>
         </div>

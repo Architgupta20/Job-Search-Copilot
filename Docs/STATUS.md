@@ -6,7 +6,7 @@ Last updated: May 2026
 
 - Resume upload (PDF + DOCX) with local parsing
 - Company search: people (senior only, same company filter) + careers jobs
-- JD tailor via Groq / OpenAI (Python + TypeScript)
+- JD tailor via Groq / OpenAI / Ollama (Python agents)
 - Download tailored resume (.docx, .txt)
 - SerpAPI for LinkedIn people (optional)
 - **Python agents** (`agents/`) — FastAPI on port 8000; required for all API features

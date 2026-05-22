@@ -66,9 +66,33 @@ export async function proxyGet(path: string): Promise<Response | null> {
   }
 }
 
+function formatProxyError(data: unknown): string | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const obj = data as Record<string, unknown>;
+  if (typeof obj.error === "string") return obj.error;
+  const detail = obj.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) =>
+        typeof d === "object" && d && "msg" in d
+          ? String((d as { msg: unknown }).msg)
+          : String(d),
+      )
+      .join("; ");
+  }
+  return undefined;
+}
+
 export async function jsonFromProxy(
   res: Response,
 ): Promise<{ data: unknown; status: number }> {
-  const data = await res.json().catch(() => ({ error: res.statusText }));
+  const raw = await res.json().catch(() => null);
+  const message =
+    formatProxyError(raw) ?? res.statusText ?? "Request failed.";
+  const data =
+    raw && typeof raw === "object"
+      ? { ...(raw as object), error: message }
+      : { error: message };
   return { data, status: res.status };
 }

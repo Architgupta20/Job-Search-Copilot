@@ -34,6 +34,3 @@ out/
 # Logs
 *.log
 npm-debug.log*
-
-# Docker volumes
-postgres_data/

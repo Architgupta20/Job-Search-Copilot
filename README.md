@@ -31,7 +31,6 @@ Runs on your Mac at `http://localhost:3000`. Data stays on your machine.
 |------|---------|
 | [Git](https://git-scm.com/) | any recent |
 | [Node.js](https://nodejs.org/) | 20 LTS |
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | optional (Postgres later; not required for current features) |
 
 ---
 
@@ -109,12 +108,6 @@ If one provider hits quota, set `LLM_PROVIDER` to another or add a second key (G
 |----------|---------|
 | `PYTHON_API_URL` | FastAPI agents base URL (default `http://127.0.0.1:8000`) |
 
-### Optional — database (future)
-
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | Postgres via `docker compose up -d` at repo root |
-
 ---
 
 ## Project structure
@@ -122,22 +115,15 @@ If one provider hits quota, set `LLM_PROVIDER` to another or add a second key (G
 ```
 Job-Search-copilot/
 ├── agents/                # Python FastAPI agents (resume, company, JD)
-│   └── app/               # Routers + services (LLM, scrape, docx)
-├── apps/web/              # Next.js UI + API proxy to Python agents
-│   ├── app/               # Pages (home, company, jd) + API routes
-│   ├── lib/
-│   │   ├── python-api.ts  # Proxy to agents/
-│   │   ├── resume/        # Session + types (UI)
-│   │   ├── company/       # Types (UI)
-│   │   └── jd/            # Types (UI)
-│   └── .env               # Your secrets (gitignored)
-├── data/                  # Local resumes & run results (gitignored)
-├── docs/
-│   ├── ARCHITECTURE.md
-│   └── RECRUITER_SETUP.md
-├── docker-compose.yml     # Postgres (optional)
-├── .env.example
-└── README.md
+│   ├── app/               # Routers + services
+│   └── scripts/           # check_groq.py (API key test)
+├── apps/web/              # Next.js UI + API proxy
+│   ├── app/               # Pages + API routes
+│   ├── lib/               # python-api, session, types, roles
+│   └── .env               # Secrets (gitignored)
+├── data/                  # Local runs (gitignored)
+├── Docs/
+└── .env.example
 ```
 
 ---
@@ -161,17 +147,6 @@ npm run build    # production build
 npm run lint     # ESLint
 ```
 
-### Optional: Postgres
-
-```bash
-# From repo root
-docker compose up -d
-```
-
-Not required for current upload / company / JD features (data is stored under `data/`).
-
----
-
 ## Privacy
 
 - Resumes and run outputs live under `data/` on your computer (gitignored)
@@ -191,8 +166,8 @@ Not required for current upload / company / JD features (data is stored under `d
 
 ## Docs
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Recruiter setup](docs/RECRUITER_SETUP.md)
+- [Architecture](Docs/ARCHITECTURE.md)
+- [Recruiter setup](Docs/RECRUITER_SETUP.md)
 
 ---
 

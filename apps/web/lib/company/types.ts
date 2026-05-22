@@ -15,6 +15,7 @@ export type PersonResult = {
   emailConfidence: ContactConfidence;
   phoneConfidence: ContactConfidence;
   source: string;
+  matchedRole?: string;
 };
 
 export type JobResult = {
@@ -23,12 +24,16 @@ export type JobResult = {
   location: string | null;
   snippet: string | null;
   matchScore: number;
+  matchedRole?: string | null;
 };
 
 export type CompanyRunResult = {
   runId: string;
   company: CompanyInfo;
   people: PersonResult[];
+  peopleByRole?: Record<string, PersonResult[]>;
   jobs: JobResult[];
+  jobsByRole?: Record<string, JobResult[]>;
+  peoplePerRole?: number;
   warnings: string[];
 };

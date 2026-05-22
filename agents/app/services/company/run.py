@@ -10,36 +10,11 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import RUNS_DIR
+from app.services.company.jobs import discover_careers_portal, fetch_jobs_deep, fetch_html
+from app.services.company.roles import PEOPLE_PER_ROLE, ROLE_LINKEDIN_TITLES
 from app.services.llm.client import llm_json_completion
 
 USER_AGENT = "JobSearchCopilot/1.0 (local recruiter tool)"
-PEOPLE_QUERY = (
-    '("Lead AI Engineer" OR "Program Manager" OR CEO OR "Head of AI" '
-    '"Engineering Manager" OR "Technical Recruiter" OR "Talent Acquisition")'
-)
-
-ROLE_PATTERNS = {
-    "AI Engineer": re.compile(
-        r"ai engineer|gen\s*ai|generative ai|llm|machine learning engineer|ml engineer",
-        re.I,
-    ),
-    "ML Engineer": re.compile(r"ml engineer|machine learning engineer|mlops", re.I),
-    "Data Scientist": re.compile(r"data scientist|applied scientist", re.I),
-    "Data Analyst": re.compile(r"data analyst|analytics engineer", re.I),
-}
-
-
-async def _fetch_html(url: str, timeout: float = 12.0) -> str | None:
-    try:
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            res = await client.get(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html"})
-            if res.status_code >= 400:
-                return None
-            if "text/html" not in res.headers.get("content-type", ""):
-                return None
-            return res.text
-    except Exception:
-        return None
 
 
 def _slugify(name: str) -> str:
@@ -59,55 +34,17 @@ async def resolve_company(name: str) -> dict:
     domain = None
     careers_url = None
     for host in dict.fromkeys(hosts):
-        html = await _fetch_html(host)
+        html = await fetch_html(host)
         if not html:
             continue
         domain = urlparse(host).hostname
-        for path in ["/careers", "/jobs", "/join-us", "/company/careers"]:
-            u = urljoin(host, path)
-            sub = await _fetch_html(u)
-            if sub and ("job" in sub.lower() or "career" in sub.lower()):
-                careers_url = u
-                break
-        if not careers_url:
-            soup = BeautifulSoup(html, "html.parser")
-            for a in soup.find_all("a", href=True):
-                t = (a.get_text() or "").lower()
-                if "career" in t or "job" in t:
-                    careers_url = urljoin(host, a["href"])
-                    break
+        careers_url, _ = await discover_careers_portal(trimmed, domain)
+        if careers_url:
+            break
         if domain:
             break
 
     return {"name": trimmed, "domain": domain, "careersUrl": careers_url}
-
-
-async def fetch_jobs(careers_url: str, roles: list[str]) -> list[dict]:
-    html = await _fetch_html(careers_url)
-    if not html:
-        return []
-    soup = BeautifulSoup(html, "html.parser")
-    base = careers_url
-    seen: set[str] = set()
-    jobs: list[dict] = []
-    for a in soup.find_all("a", href=True):
-        title = re.sub(r"\s+", " ", a.get_text()).strip()
-        if len(title) < 8 or len(title) > 120:
-            continue
-        url = urljoin(base, a["href"])
-        if url in seen:
-            continue
-        score = 0
-        for role in roles:
-            pat = ROLE_PATTERNS.get(role)
-            if pat and pat.search(title):
-                score += 10
-        if score < 8:
-            continue
-        seen.add(url)
-        jobs.append({"title": title, "url": url, "location": None, "snippet": None, "matchScore": score})
-    jobs.sort(key=lambda j: j["matchScore"], reverse=True)
-    return jobs[:15]
 
 
 def _person_works_at_company(serp_title: str, snippet: str, company: str) -> bool:
@@ -116,87 +53,156 @@ def _person_works_at_company(serp_title: str, snippet: str, company: str) -> boo
     blob = f"{serp_title} {snippet}".lower()
     if not any(len(a) >= 3 and a in blob for a in aliases):
         return False
-    if "yahoo" in blob and not any(a in blob for a in aliases if "yahoo" not in a):
-        return False
-    if "helium" in blob and "sarvam" not in blob.lower() and "sarvam" in company.lower():
-        return False
     return True
 
 
-async def discover_people(company_name: str, domain: str | None) -> tuple[list[dict], list[str]]:
+def _parse_person(item: dict, company_name: str, matched_role: str) -> dict | None:
+    link = item.get("link", "")
+    if "linkedin.com/in" not in link:
+        return None
+    title = item.get("title", "")
+    snippet = item.get("snippet", "")
+    if not _person_works_at_company(title, snippet, company_name):
+        return None
+    name = title.split("-")[0].split("|")[0].strip()
+    if len(name) < 3:
+        return None
+    return {
+        "name": name,
+        "title": snippet[:100] if snippet else "Professional",
+        "linkedinUrl": link.split("?")[0],
+        "email": None,
+        "phone": None,
+        "emailConfidence": "not_found",
+        "phoneConfidence": "not_found",
+        "source": f"SerpAPI · {company_name}",
+        "matchedRole": matched_role,
+    }
+
+
+async def discover_people_for_roles(
+    company_name: str,
+    domain: str | None,
+    target_roles: list[str],
+) -> tuple[list[dict], dict[str, list[dict]], list[str]]:
     warnings: list[str] = []
     people: list[dict] = []
+    people_by_role: dict[str, list[dict]] = {r: [] for r in target_roles}
+    seen_links: set[str] = set()
     key = (os.getenv("SERPAPI_API_KEY") or "").strip()
 
-    if key:
-        q = f'site:linkedin.com/in "{company_name}" {PEOPLE_QUERY}'
-        url = "https://serpapi.com/search.json"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            res = await client.get(url, params={"engine": "google", "q": q, "num": 20, "api_key": key})
-            if res.status_code == 200:
-                for item in res.json().get("organic_results", []):
-                    link = item.get("link", "")
-                    if "linkedin.com/in" not in link:
-                        continue
-                    title = item.get("title", "")
-                    snippet = item.get("snippet", "")
-                    if not _person_works_at_company(title, snippet, company_name):
-                        continue
-                    name = title.split("-")[0].split("|")[0].strip()
-                    if len(name) < 3:
-                        continue
-                    people.append({
-                        "name": name,
-                        "title": snippet[:80] if snippet else "Professional",
-                        "linkedinUrl": link.split("?")[0],
-                        "email": None,
-                        "phone": None,
-                        "emailConfidence": "not_found",
-                        "phoneConfidence": "not_found",
-                        "source": f"SerpAPI · {company_name}",
-                    })
-                    if len(people) >= 10:
-                        break
+    if not key:
+        warnings.append(
+            f"Add SERPAPI_API_KEY for LinkedIn search ({PEOPLE_PER_ROLE} people per selected role)."
+        )
     else:
-        warnings.append("Add SERPAPI_API_KEY for LinkedIn people search.")
+        async with httpx.AsyncClient(timeout=35.0) as client:
+            for role in target_roles:
+                titles = ROLE_LINKEDIN_TITLES.get(role, role)
+                q = (
+                    f'site:linkedin.com/in "{company_name}" '
+                    f"({titles}) "
+                    '-intitle:"jobs" -intitle:"job"'
+                )
+                res = await client.get(
+                    "https://serpapi.com/search.json",
+                    params={
+                        "engine": "google",
+                        "q": q,
+                        "num": max(PEOPLE_PER_ROLE + 5, 15),
+                        "api_key": key,
+                    },
+                )
+                if res.status_code != 200:
+                    warnings.append(f"SerpAPI failed for role: {role}")
+                    continue
 
-    if len(people) < 5 and domain:
+                role_count = 0
+                for item in res.json().get("organic_results", []):
+                    person = _parse_person(item, company_name, role)
+                    if not person:
+                        continue
+                    link = person["linkedinUrl"]
+                    if link in seen_links:
+                        continue
+                    seen_links.add(link)
+                    people.append(person)
+                    people_by_role[role].append(person)
+                    role_count += 1
+                    if role_count >= PEOPLE_PER_ROLE:
+                        break
+
+                if role_count < PEOPLE_PER_ROLE:
+                    warnings.append(
+                        f"Only {role_count}/{PEOPLE_PER_ROLE} LinkedIn profiles for {role}."
+                    )
+
+    total_expected = PEOPLE_PER_ROLE * len(target_roles)
+    if len(people) < total_expected // 2 and domain:
         try:
             raw = await llm_json_completion(
-                'Extract up to 10 senior people for cold outreach at this company. JSON: {"people":[{"name","title","email","phone"}]}. No juniors.',
-                {"company": company_name, "domain": domain},
+                "Extract senior people at this company for outreach. JSON: "
+                '{"people":[{"name","title","email","phone","roleHint"}]}. No interns.',
+                {"company": company_name, "domain": domain, "roles": target_roles},
             )
-            for p in raw.get("people", [])[:10]:
-                people.append({
+            for p in raw.get("people", [])[:15]:
+                link = f"https://www.linkedin.com/search/results/people/?keywords={p.get('name','')}+{company_name}"
+                if link in seen_links:
+                    continue
+                seen_links.add(link)
+                hint = p.get("roleHint") or target_roles[0]
+                person = {
                     "name": p.get("name", ""),
                     "title": p.get("title", ""),
-                    "linkedinUrl": f"https://www.linkedin.com/search/results/people/?keywords={p.get('name','')}+{company_name}",
+                    "linkedinUrl": link,
                     "email": p.get("email"),
                     "phone": p.get("phone"),
                     "emailConfidence": "likely" if p.get("email") else "not_found",
                     "phoneConfidence": "likely" if p.get("phone") else "not_found",
-                    "source": "Python LLM · page",
-                })
+                    "source": "LLM fallback",
+                    "matchedRole": hint if hint in target_roles else target_roles[0],
+                }
+                people.append(person)
+                if hint in people_by_role and len(people_by_role[hint]) < PEOPLE_PER_ROLE:
+                    people_by_role[hint].append(person)
         except Exception:
             pass
 
-    warnings.append("People: current employees / leaders only (no SDE1).")
-    return people[:10], warnings
+    warnings.append(
+        f"LinkedIn: up to {PEOPLE_PER_ROLE} people per selected role "
+        f"({len(target_roles)} roles → target {total_expected} total)."
+    )
+    return people, people_by_role, warnings
 
 
 async def run_company_search(company_name: str, target_roles: list[str]) -> dict:
     warnings: list[str] = []
     company = await resolve_company(company_name)
-    if not company.get("domain"):
-        warnings.append("Could not verify company website.")
 
-    jobs = []
-    if company.get("careersUrl"):
-        jobs = await fetch_jobs(company["careersUrl"], target_roles)
+    careers_url = company.get("careersUrl")
+    extra_pages: list[str] = []
+    if company.get("domain") or company_name:
+        found, extra = await discover_careers_portal(
+            company["name"], company.get("domain")
+        )
+        if found:
+            careers_url = found
+            company["careersUrl"] = found
+        extra_pages = extra
+
+    jobs: list[dict] = []
+    jobs_by_role: dict[str, list[dict]] = {r: [] for r in target_roles}
+    if careers_url:
+        jobs, jobs_by_role, jw = await fetch_jobs_deep(
+            careers_url, extra_pages, target_roles, company["name"], company.get("domain")
+        )
+        warnings.extend(jw)
     else:
-        warnings.append("Careers page not found.")
+        warnings.append("Careers portal not found — job list may be empty.")
 
-    people, pw = await discover_people(company["name"], company.get("domain"))
+    people, people_by_role, pw = await discover_people_for_roles(
+        company["name"], company.get("domain"), target_roles
+    )
     warnings.extend(pw)
 
     run_id = str(uuid.uuid4())
@@ -204,7 +210,10 @@ async def run_company_search(company_name: str, target_roles: list[str]) -> dict
         "runId": run_id,
         "company": company,
         "people": people,
+        "peopleByRole": people_by_role,
         "jobs": jobs,
+        "jobsByRole": jobs_by_role,
+        "peoplePerRole": PEOPLE_PER_ROLE,
         "warnings": list(dict.fromkeys(warnings)),
     }
     RUNS_DIR.mkdir(parents=True, exist_ok=True)

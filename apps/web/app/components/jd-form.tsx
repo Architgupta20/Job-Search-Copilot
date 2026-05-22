@@ -5,10 +5,54 @@ import { FormEvent, useState } from "react";
 import type { JDTailorResult } from "@/lib/jd/types";
 import { getResumeSession } from "@/lib/resume/session";
 
+function AtsScoreCard({ result }: { result: JDTailorResult }) {
+  const ats = result.atsBreakdown;
+  const score = ats?.scorePercent ?? result.atsScorePercent;
+  const matched = ats?.matchedKeywords ?? result.keywordsUsed;
+  const missing = ats?.missingKeywords ?? result.keywordsSkipped;
+
+  return (
+    <section className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 p-6 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h2 className="text-lg font-semibold text-zinc-900">ATS score</h2>
+        <div className="text-right">
+          <p className="text-4xl font-bold text-emerald-800">{score}%</p>
+          <p className="text-xs text-zinc-600">
+            {ats?.supportedCount ?? matched.length} of {ats?.totalKeywords ?? "—"}{" "}
+            JD keywords supported by your resume
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 h-3 overflow-hidden rounded-full bg-zinc-200">
+        <div
+          className="h-full rounded-full bg-emerald-600 transition-all"
+          style={{ width: `${Math.min(100, score)}%` }}
+        />
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div>
+          <h3 className="text-sm font-medium text-emerald-900">Matched</h3>
+          <p className="mt-1 text-sm text-zinc-700">
+            {matched.length > 0 ? matched.join(", ") : "—"}
+          </p>
+        </div>
+        <div>
+          <h3 className="text-sm font-medium text-amber-900">Missing (not in resume)</h3>
+          <p className="mt-1 text-sm text-zinc-700">
+            {missing.length > 0 ? missing.join(", ") : "—"}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function JDForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<JDTailorResult | null>(null);
+  const [editableText, setEditableText] = useState("");
+  const [copied, setCopied] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -47,13 +91,24 @@ export function JDForm() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Tailoring failed.");
-      setResult(data as JDTailorResult);
+      const msg =
+        data.error ??
+        (typeof data.detail === "string" ? data.detail : null);
+      if (!res.ok) throw new Error(msg ?? "Tailoring failed.");
+      const typed = data as JDTailorResult;
+      setResult(typed);
+      setEditableText(typed.tailoredText ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tailoring failed.");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function copyText() {
+    await navigator.clipboard.writeText(editableText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -66,8 +121,8 @@ export function JDForm() {
           Tailor to job description
         </h1>
         <p className="mt-2 text-zinc-600">
-          Rewords your resume using JD keywords only when they match facts you
-          already have — nothing invented.
+          Suggestions appear in the UI — copy into <strong>your own Word file</strong>.
+          Download is optional plain text/DOCX (not your original formatting).
         </p>
       </div>
 
@@ -76,10 +131,7 @@ export function JDForm() {
         className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
       >
         <div>
-          <label
-            htmlFor="jd"
-            className="block text-sm font-medium text-zinc-800"
-          >
+          <label htmlFor="jd" className="block text-sm font-medium text-zinc-800">
             Job description
           </label>
           <textarea
@@ -102,7 +154,7 @@ export function JDForm() {
           disabled={loading}
           className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-70"
         >
-          {loading ? "Tailoring… (20–60s)" : "Tailor resume"}
+          {loading ? "Analyzing JD & resume… (20–60s)" : "Get suggestions + ATS score"}
         </button>
 
         {error && (
@@ -123,79 +175,90 @@ export function JDForm() {
             </p>
           ))}
 
-          <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold text-zinc-900">Results</h2>
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-900">
-                ATS match (supported keywords): {result.atsScorePercent}%
-              </span>
-            </div>
+          <AtsScoreCard result={result} />
 
-            {result.jdTitle && (
-              <p className="mt-2 text-sm text-zinc-600">
-                Role: {result.jdTitle}
+          {result.jdTitle && (
+            <p className="text-sm text-zinc-600">
+              Role: <strong>{result.jdTitle}</strong>
+            </p>
+          )}
+
+          {result.suggestedEdits?.length > 0 && (
+            <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-semibold text-zinc-900">
+                Suggested edits ({result.suggestedEdits.length})
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                Apply these in your DOCX manually — section by section.
               </p>
-            )}
-
-            {result.changeSummary.length > 0 && (
-              <ul className="mt-4 list-inside list-disc text-sm text-zinc-700">
-                {result.changeSummary.map((c) => (
-                  <li key={c}>{c}</li>
+              <ul className="mt-4 space-y-4">
+                {result.suggestedEdits.map((edit, i) => (
+                  <li
+                    key={`${edit.section}-${i}`}
+                    className="rounded-lg border border-zinc-100 bg-zinc-50 p-4"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                      {edit.section}
+                    </p>
+                    <p className="mt-2 text-sm text-zinc-500">
+                      <span className="font-medium">Was:</span> {edit.original}
+                    </p>
+                    <p className="mt-2 text-sm text-zinc-900">
+                      <span className="font-medium text-emerald-800">Try:</span>{" "}
+                      {edit.suggested}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">{edit.reason}</p>
+                  </li>
                 ))}
               </ul>
-            )}
+            </section>
+          )}
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <h3 className="text-sm font-medium text-zinc-800">
-                  Keywords used
-                </h3>
-                <p className="mt-1 text-sm text-zinc-600">
-                  {result.keywordsUsed.length > 0
-                    ? result.keywordsUsed.join(", ")
-                    : "—"}
-                </p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-zinc-800">
-                  Not added (unsupported)
-                </h3>
-                <p className="mt-1 text-sm text-zinc-600">
-                  {result.keywordsSkipped.length > 0
-                    ? result.keywordsSkipped.join(", ")
-                    : "—"}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href={`/api/run/jd/${result.runId}/download?format=docx`}
-                download
-                className="inline-flex items-center justify-center rounded-xl bg-emerald-700 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-800"
-              >
-                Download Word (.docx)
-              </a>
-              <a
-                href={`/api/run/jd/${result.runId}/download?format=txt`}
-                download
-                className="inline-flex items-center justify-center rounded-xl border border-zinc-300 px-4 py-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-              >
-                Download text (.txt)
-              </a>
-            </div>
-            <p className="mt-2 text-xs text-zinc-500">
-              For best formatting, upload your resume as <strong>DOCX</strong>{" "}
-              (not PDF). Word download keeps your fonts and spacing.
-            </p>
-          </section>
+          {result.changeSummary.length > 0 && (
+            <ul className="list-inside list-disc text-sm text-zinc-700">
+              {result.changeSummary.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          )}
 
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-zinc-900">Preview</h2>
-            <pre className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-sm text-zinc-800">
-              {result.tailoredText}
-            </pre>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-zinc-900">
+                Editable draft (copy into Word)
+              </h2>
+              <button
+                type="button"
+                onClick={copyText}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50"
+              >
+                {copied ? "Copied!" : "Copy all"}
+              </button>
+            </div>
+            <textarea
+              value={editableText}
+              onChange={(e) => setEditableText(e.target.value)}
+              rows={16}
+              className="mt-4 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-800 outline-none focus:ring-2 focus:ring-emerald-600"
+            />
           </section>
+
+          <div className="flex flex-wrap gap-3">
+            <a
+              href={`/api/run/jd/${result.runId}/download?format=docx`}
+              download
+              className="inline-flex items-center justify-center rounded-xl border border-zinc-300 px-4 py-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+            >
+              Download plain Word (.docx)
+            </a>
+            <a
+              href={`/api/run/jd/${result.runId}/download?format=txt`}
+              download
+              className="inline-flex items-center justify-center rounded-xl border border-zinc-300 px-4 py-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+            >
+              Download text (.txt)
+            </a>
+          </div>
         </div>
       )}
     </>

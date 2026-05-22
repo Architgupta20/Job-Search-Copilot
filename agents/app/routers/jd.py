@@ -52,21 +52,14 @@ async def jd_download(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    is_docx = resume["mimeType"].endswith("wordprocessingml") or resume[
-        "fileName"
-    ].lower().endswith(".docx")
-    blob = build_docx_bytes(
-        result["tailoredText"],
-        resume.get("storedPath"),
-        is_docx,
-    )
+    blob = build_docx_bytes(result["tailoredText"])
     base = resume["fileName"].rsplit(".", 1)[0] or "resume"
-    filename = f"{base}-tailored.docx"
+    filename = f"{base}-suggestions.docx"
     return Response(
         content=blob,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "X-Template-Preserved": "1" if is_docx else "0",
+            "X-Template-Preserved": "0",
         },
     )

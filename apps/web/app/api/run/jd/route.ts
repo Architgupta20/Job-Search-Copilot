@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const AGENTS_HINT =
-  "Start Python agents: cd agents && source .venv/bin/activate && uvicorn app.main:app --reload --port 8000";
+  "Start Python agents: conda activate job-copilot && cd agents && uvicorn app.main:app --reload --port 8000";
 
 export async function POST(request: Request) {
   const body = await request.json();
