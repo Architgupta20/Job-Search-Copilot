@@ -26,6 +26,7 @@ _KEYS_FROM_WEB_ENV = frozenset(
         "OLLAMA_MODEL",
         "OLLAMA_BASE_URL",
         "SERPAPI_API_KEY",
+        "HUNTER_API_KEY",
     }
 )
 
@@ -81,6 +82,10 @@ def get_openai_key() -> str:
 
 def get_llm_provider() -> str:
     return _clean(os.environ.get("LLM_PROVIDER")).lower()
+
+
+def get_hunter_key() -> str:
+    return _clean(os.environ.get("HUNTER_API_KEY"))
 
 
 # Load on import

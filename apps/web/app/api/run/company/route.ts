@@ -6,7 +6,7 @@ import {
 } from "@/lib/python-api";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const AGENTS_HINT =
   "Start both servers: npm run dev (from repo root, with conda env job-copilot)";

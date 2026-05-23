@@ -1,8 +1,8 @@
 # Job Search Copilot
 
-Local-first tool for recruiters. Upload a resume once, then either **search a company** (LinkedIn people + careers jobs) or **tailor your resume to a job description** — using only facts from your upload, nothing invented.
+Local-first recruiter tool. Upload a resume once, then **search a company** (LinkedIn people, email research, careers jobs) or **tailor your resume to a job description** — using only facts from your upload.
 
-Runs on your Mac at **http://localhost:3000**. Data stays under `data/` on your machine (gitignored).
+Runs at **http://localhost:3000**. Data stays in local `data/` (gitignored).
 
 **Repo:** https://github.com/Architgupta20/Job-Search-Copilot
 
@@ -12,24 +12,19 @@ Runs on your Mac at **http://localhost:3000**. Data stays under `data/` on your 
 
 ### Path A — Company search
 
-- Enter a company name and select **one or more job profiles** (tech, product, leadership, and business roles)
-- **LinkedIn people:** up to **10 profiles per selected role** (e.g. ML Engineer + AI Engineer → up to 20 people)
-- **Draft cold email** per contact (uses resume facts when uploaded)
-- **Download CSV** of people + jobs
-- **Careers portal auto-detect** (company site, Greenhouse, Lever, Ashby via crawl + search)
-- **Jobs:** openings **only for that company** (careers site + their Greenhouse/Lever board — random job boards filtered out)
+- **Company name + roles** — pick one or more profiles (tech, product, leadership, business)
+- **LinkedIn people** — up to **10 senior profiles per role**, filtered to that role or close equivalents (e.g. AI Engineer → ML / GenAI / Head of AI), ranked Director / Head / Principal first
+- **Contact research** (automatic) — tries **Hunter.io**, **Google/SerpAPI**, and **company web pages** for email; shows all findings + confidence
+- **Outreach drafts** — separate UI boxes for **cold email** (full format with subject) and **LinkedIn message** (connection/InMail note)
+- **Jobs** — only that company’s careers portal (auto-detected: company site, Greenhouse, Lever, Ashby)
 - **ATS %** and **Tailor my resume** per job when a resume is uploaded
-- Senior contacts only (leaders, recruiters) — not junior IC spam
-- Requires **`SERPAPI_API_KEY`** for best LinkedIn results
+- **Download CSV** of people + jobs
 
 ### Path B — Job description (JD)
 
-- Paste a full JD
-- **ATS score** with matched vs missing keywords (supported facts only)
-- **Suggested edits** in the UI (section, before/after, reason) — copy into **your own Word file**
-- **Editable draft** textarea + **Copy all**
-- Optional download: plain **.docx** or **.txt** (does not merge into your uploaded resume layout)
-- Upload resume as **DOCX** on home for easiest manual updates
+- Paste a full JD → **ATS score**, **suggested edits**, editable draft
+- Copy into your own Word file; optional plain **.docx** / **.txt** download
+- DOCX upload on home recommended
 
 ---
 
@@ -37,10 +32,10 @@ Runs on your Mac at **http://localhost:3000**. Data stays under `data/` on your 
 
 | Part | Port | Role |
 |------|------|------|
-| **Python agents** (`agents/`) | 8000 | Resume parse, company search, JD tailor, exports |
+| **Python agents** (`agents/`) | 8000 | Resume parse, company search, contact enrichment, JD tailor |
 | **Next.js UI** (`apps/web/`) | 3000 | UI + API proxy to Python |
 
-Both must be running (or use **`npm run dev`** from repo root — see below). API keys live in **`apps/web/.env`** only.
+API keys live in **`apps/web/.env`** only (loaded by `agents/app/env.py`).
 
 ---
 
@@ -48,12 +43,11 @@ Both must be running (or use **`npm run dev`** from repo root — see below). AP
 
 | Tool | Notes |
 |------|--------|
-| [Git](https://git-scm.com/) | any recent |
 | [Node.js](https://nodejs.org/) | 20 LTS |
-| [Python](https://www.python.org/) | 3.12 (or Anaconda) |
-| [Groq API key](https://console.groq.com/keys) | recommended for JD tailor |
-| [SerpAPI key](https://serpapi.com) | optional, better company people search |
-| [Ollama](https://ollama.com) | optional, local LLM (no API key) |
+| [Python](https://www.python.org/) | 3.12 or Anaconda |
+| [Groq](https://console.groq.com/keys) | JD tailor + outreach drafts (or Ollama / OpenAI) |
+| [SerpAPI](https://serpapi.com) | LinkedIn people, jobs, web email search |
+| [Hunter.io](https://hunter.io/api-keys) | Best email discovery (optional but recommended) |
 
 ---
 
@@ -72,109 +66,102 @@ cd Job-Search-Copilot
 cp .env.example apps/web/.env
 ```
 
-Edit **`apps/web/.env`** (never commit this file):
+Edit **`apps/web/.env`** (never commit):
 
 ```env
 LLM_PROVIDER=groq
 GROQ_API_KEY=gsk_your_key_here
 
-# Optional — LinkedIn people (10 per role)
+# Company search + contact research
 SERPAPI_API_KEY=your_serpapi_key
+HUNTER_API_KEY=your_hunter_key
 ```
 
-Test Groq key:
+Verify keys:
 
 ```bash
 cd agents
-conda activate job-copilot   # or your venv
-python scripts/check_groq.py
-```
-
-Expect: `SUCCESS — Groq accepts this key.`
-
-### 3. Run both servers (one command)
-
-From repo root (with `job-copilot` conda env and `apps/web` dependencies installed):
-
-```bash
 conda activate job-copilot
-npm run dev
+python scripts/check_groq.py
+python scripts/check_hunter.py
 ```
 
-This starts agents on **8000** and the web UI on **3000**. Stop with `Ctrl+C`.
-
-### 3b. Or run separately
-
-**Python agents (Terminal 1)**
-
-**Conda (recommended on Mac with Anaconda):**
+### 3. Install
 
 ```bash
+# Python
 cd agents
 conda create -n job-copilot python=3.12 -y
 conda activate job-copilot
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
 
-**Or venv:**
-
-```bash
-cd agents
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Check: http://127.0.0.1:8000/health → `{"status":"ok"}`
-
-### 4. Web UI (Terminal 2)
-
-```bash
-cd apps/web
+# Web
+cd ../apps/web
 npm install
+```
+
+### 4. Run (one command)
+
+From repo root:
+
+```bash
+conda activate job-copilot
 npm run dev
 ```
 
-Open **http://localhost:3000**
+- Agents: http://127.0.0.1:8000/health  
+- UI: http://localhost:3000  
+
+Stop with `Ctrl+C`.
+
+### Or two terminals
+
+```bash
+# Terminal 1
+cd agents && conda activate job-copilot
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+# Terminal 2
+cd apps/web && npm run dev
+```
 
 ---
 
 ## Environment variables
 
-All in **`apps/web/.env`** (see `.env.example` at repo root).
+All in **`apps/web/.env`** (see `.env.example`).
 
-### JD tailor (Python agents — pick one)
+### LLM (pick one)
 
 | Setup | Variables |
 |--------|-----------|
-| **Groq** (recommended) | `LLM_PROVIDER=groq`, `GROQ_API_KEY` |
+| **Groq** | `LLM_PROVIDER=groq`, `GROQ_API_KEY` |
 | **OpenAI** | `LLM_PROVIDER=openai`, `OPENAI_API_KEY` |
-| **Ollama** (local, free) | `LLM_PROVIDER=ollama`, `OLLAMA_MODEL=llama3.2` |
+| **Ollama** (local) | `LLM_PROVIDER=ollama`, `OLLAMA_MODEL=llama3.2` |
 
-Python agents do **not** use Gemini/OpenRouter directly — use Groq, OpenAI, or Ollama.
-
-### Company search
+### Company search & contacts
 
 | Variable | Purpose |
 |----------|---------|
-| `SERPAPI_API_KEY` | LinkedIn people via Google/SerpAPI |
+| `SERPAPI_API_KEY` | LinkedIn people, careers/jobs discovery, Google email search in snippets |
+| `HUNTER_API_KEY` | Hunter.io email finder + domain directory |
 
-### Optional
-
-| Variable | Purpose |
+| Optional | Purpose |
 |----------|---------|
 | `PYTHON_API_URL` | Default `http://127.0.0.1:8000` |
 | `GROQ_MODEL` | Default `llama-3.3-70b-versatile` |
+
+**Phone numbers** are opportunistic (Hunter or scraped pages). There is no dedicated phone API wired in yet.
 
 ---
 
 ## How to use
 
-1. **Home** — upload resume (DOCX preferred).
-2. **Company** — pick roles → optional careers URL → search → CSV export, cold emails, ATS/tailor per job.
-3. **JD** — paste description → get **ATS score** + suggestions → edit in UI → copy into your Word file (optional download).
-4. Re-upload on home to change resume file.
+1. **Home** — upload resume (PDF or DOCX).
+2. **Company** — enter company, select role(s), search (30–90s with contact research).
+3. Per person: review **Contact research**, click **Draft email + LinkedIn** → two separate copy boxes.
+4. Per job: **ATS %**, **Tailor my resume**, **Open posting**.
+5. **JD** — paste job description → ATS + edits → copy into Word.
 
 ---
 
@@ -182,39 +169,19 @@ Python agents do **not** use Gemini/OpenRouter directly — use Groq, OpenAI, or
 
 ```
 Job-Search-Copilot/
-├── agents/                 # FastAPI Python agents
+├── agents/
 │   ├── app/
-│   │   ├── main.py
-│   │   ├── env.py          # loads apps/web/.env
+│   │   ├── env.py              # loads apps/web/.env
 │   │   ├── routers/
-│   │   └── services/       # company, jd, resume, llm
+│   │   └── services/company/   # run, jobs, contact_enrichment, cold_email
 │   └── scripts/
-│       └── check_groq.py
-├── apps/web/               # Next.js UI + API proxy
-│   ├── app/                # pages + API routes
-│   └── lib/                # python-api, types, roles, session
-├── data/                   # resumes & runs (gitignored)
-├── Docs/
-│   ├── ARCHITECTURE.md
-│   ├── RECRUITER_SETUP.md
-│   └── STATUS.md
+│       ├── check_groq.py
+│       └── check_hunter.py
+├── apps/web/                   # Next.js UI
+├── scripts/dev.sh              # npm run dev
+├── data/                       # gitignored
 └── .env.example
 ```
-
----
-
-## Development
-
-```bash
-# Both (from repo root)
-conda activate job-copilot && npm run dev
-
-# Or separately
-cd agents && conda activate job-copilot && uvicorn app.main:app --reload --port 8000
-cd apps/web && npm run dev && npm run build && npm run lint
-```
-
-**Cursor/VS Code:** `.vscode/settings.json` disables auto-activate of a missing `agents/.venv`. Use `conda activate job-copilot` in the agents terminal.
 
 ---
 
@@ -222,19 +189,21 @@ cd apps/web && npm run dev && npm run build && npm run lint
 
 | Problem | Fix |
 |---------|-----|
-| `503` / start Python agents | Run uvicorn on port 8000 |
-| Groq `401 Invalid API Key` | New key in `apps/web/.env`, `python scripts/check_groq.py`, restart uvicorn |
-| `source .venv/bin/activate` fails | Use conda `job-copilot` or recreate venv |
-| No LinkedIn people | Add `SERPAPI_API_KEY` |
-| Few jobs found | Open careers portal link; some sites block scrapers |
+| `503` / start Python agents | `uvicorn` on port 8000 or `npm run dev` |
+| Groq `401` / restricted | New key, `check_groq.py`, or `LLM_PROVIDER=ollama` |
+| Hunter fails | `python scripts/check_hunter.py`, credits on hunter.io |
+| No LinkedIn people | `SERPAPI_API_KEY`, restart agents |
+| No email found | Add `HUNTER_API_KEY` + `SERPAPI_API_KEY`; check Contact research panel |
+| Search slow | Normal — contact research runs per person |
+| `.venv` activate fails | Use `conda activate job-copilot` |
 
 ---
 
 ## Privacy
 
-- Resumes and runs stay in local `data/` (gitignored)
-- Never commit `apps/web/.env` or API keys
-- Revoke keys if they were ever pasted in chat or committed by mistake
+- Resumes and runs stay local in `data/`
+- Never commit `apps/web/.env`
+- Revoke API keys if exposed
 
 ---
 

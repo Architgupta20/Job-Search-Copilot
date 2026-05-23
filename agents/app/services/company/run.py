@@ -13,7 +13,7 @@ from app.config import RUNS_DIR
 from app.services.company.job_ats import enrich_jobs_with_ats
 from app.services.company.job_detail import fetch_job_posting_text
 from app.services.company.jobs import discover_careers_portal, fetch_jobs_deep, fetch_html
-from app.services.company.contact_hints import contact_lookup_hints
+from app.services.company.contact_enrichment import enrich_people_contacts
 from app.services.company.roles import (
     PEOPLE_PER_ROLE,
     ROLE_LINKEDIN_TITLES,
@@ -120,14 +120,6 @@ def _parse_person(item: dict, company_name: str, matched_role: str) -> dict | No
     }
 
 
-def _attach_contact_hints(person: dict, company_name: str, domain: str | None) -> dict:
-    if not person.get("email"):
-        person["contactHints"] = contact_lookup_hints(
-            company_name, person.get("name", ""), domain
-        )
-    return person
-
-
 async def discover_people_for_roles(
     company_name: str,
     domain: str | None,
@@ -190,7 +182,6 @@ async def discover_people_for_roles(
                     link = person["linkedinUrl"]
                     seen_links.add(link)
                     person.pop("seniorityRank", None)
-                    _attach_contact_hints(person, company_name, domain)
                     people.append(person)
                     people_by_role[role].append(person)
                     role_count += 1
@@ -213,10 +204,21 @@ async def discover_people_for_roles(
         "People are ranked by seniority (Director / Head / Principal / Lead first) "
         f"and filtered to {', '.join(target_roles)} or equivalent titles only.",
     )
+    if people:
+        warnings.append(
+            "Researching email/phone via Hunter.io + Google + company pages (30–90s)…"
+        )
+        await enrich_people_contacts(people, company_name, domain)
+        people_by_role = {r: [] for r in target_roles}
+        for p in people:
+            mr = p.get("matchedRole")
+            if mr in people_by_role:
+                people_by_role[mr].append(p)
+
     warnings.append(
         f"LinkedIn: up to {PEOPLE_PER_ROLE} people per selected role "
         f"({len(target_roles)} roles → target {total_expected} total). "
-        "Email/phone rarely appear on LinkedIn — see contact hints on each profile."
+        "Add HUNTER_API_KEY in apps/web/.env for best email discovery."
     )
     return people, people_by_role, warnings
 

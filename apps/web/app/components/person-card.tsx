@@ -29,11 +29,10 @@ export function PersonCard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ColdOutreachDraft | null>(null);
-  const [showDrafts, setShowDrafts] = useState(false);
-  const [showHints, setShowHints] = useState(false);
+  const [showResearch, setShowResearch] = useState(false);
 
-  const needsContactHelp =
-    !person.email && person.emailConfidence === "not_found";
+  const research = person.contactResearch;
+  const hasEmail = Boolean(person.email);
 
   async function draftOutreach() {
     const session = getResumeSession();
@@ -60,7 +59,6 @@ export function PersonCard({
         warning: data.warning,
         source: data.source,
       });
-      setShowDrafts(true);
       if (data.warning) setError(data.warning);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Draft failed.");
@@ -70,44 +68,71 @@ export function PersonCard({
   }
 
   return (
-    <li className="py-4 first:pt-0">
+    <li className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
       <p className="font-medium text-zinc-900">{person.name}</p>
       <p className="text-sm text-zinc-600">{person.title}</p>
       {person.matchedRole && (
         <p className="mt-1 text-xs text-emerald-800">
-          Matched search: {person.matchedRole} (or equivalent title)
+          Matched: {person.matchedRole} (or equivalent)
         </p>
       )}
 
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-700">
-        <span>
-          Email: {person.email ?? "—"}{" "}
-          <ConfidenceBadge value={person.emailConfidence} />
-        </span>
-        <span>
-          Phone: {person.phone ?? "—"}{" "}
-          <ConfidenceBadge value={person.phoneConfidence} />
-        </span>
-      </div>
-
-      {needsContactHelp && person.contactHints && person.contactHints.length > 0 && (
-        <div className="mt-2">
+      <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/50 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-violet-900">
+          Contact research
+        </p>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-800">
+          <span>
+            Email: {person.email ?? "Not found"}{" "}
+            <ConfidenceBadge value={person.emailConfidence} />
+          </span>
+          <span>
+            Phone: {person.phone ?? "Not found"}{" "}
+            <ConfidenceBadge value={person.phoneConfidence} />
+          </span>
+        </div>
+        {research && research.sourcesChecked.length > 0 && (
+          <p className="mt-2 text-xs text-zinc-600">
+            Checked: {research.sourcesChecked.join(" · ")}
+          </p>
+        )}
+        {research && research.candidates.length > 0 && (
           <button
             type="button"
-            onClick={() => setShowHints((v) => !v)}
-            className="text-xs font-medium text-emerald-800 underline"
+            onClick={() => setShowResearch((v) => !v)}
+            className="mt-2 text-xs font-medium text-violet-800 underline"
           >
-            {showHints ? "Hide" : "Where to find email / phone"}
+            {showResearch ? "Hide" : "Show"} all findings (
+            {research.candidates.length})
           </button>
-          {showHints && (
-            <ul className="mt-2 list-inside list-disc space-y-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-              {person.contactHints.map((hint) => (
-                <li key={hint}>{hint}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+        )}
+        {showResearch && research?.candidates && (
+          <ul className="mt-2 space-y-1 text-xs text-zinc-700">
+            {research.candidates.map((c, i) => (
+              <li
+                key={`${c.source}-${i}`}
+                className="rounded border border-violet-100 bg-white px-2 py-1"
+              >
+                {c.email && <span className="font-medium">{c.email}</span>}
+                {c.phone && !c.email && (
+                  <span className="font-medium">{c.phone}</span>
+                )}
+                {!c.email && !c.phone && c.detail && (
+                  <span className="text-zinc-500">{c.detail}</span>
+                )}
+                <span className="text-zinc-500"> — {c.source}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {!hasEmail && person.contactHints && person.contactHints.length > 0 && (
+          <ul className="mt-2 list-inside list-disc text-xs text-zinc-600">
+            {person.contactHints.slice(0, 4).map((h) => (
+              <li key={h}>{h}</li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
         {person.linkedinUrl && (
@@ -117,26 +142,17 @@ export function PersonCard({
             rel="noopener noreferrer"
             className="text-sm text-emerald-700 underline"
           >
-            LinkedIn
+            Open LinkedIn
           </a>
         )}
         <button
           type="button"
           disabled={loading}
           onClick={draftOutreach}
-          className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium hover:bg-zinc-50 disabled:opacity-50"
+          className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {loading ? "Drafting…" : "Draft email + LinkedIn"}
         </button>
-        {draft && (
-          <button
-            type="button"
-            onClick={() => setShowDrafts((v) => !v)}
-            className="rounded-lg border border-emerald-300 px-2 py-1 text-xs text-emerald-800 hover:bg-emerald-50"
-          >
-            {showDrafts ? "Hide drafts" : "Show drafts"}
-          </button>
-        )}
       </div>
 
       {error && (
@@ -148,41 +164,48 @@ export function PersonCard({
         </p>
       )}
 
-      {showDrafts && draft && (
-        <div className="mt-3 space-y-4">
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm">
-            <p className="font-semibold text-zinc-900">Cold email</p>
-            <p className="mt-2 font-medium text-zinc-800">
+      {draft && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="flex flex-col rounded-xl border-2 border-zinc-300 bg-zinc-50 p-4 shadow-sm">
+            <div className="mb-3 border-b border-zinc-200 pb-2">
+              <p className="text-sm font-bold text-zinc-900">Cold email</p>
+              <p className="text-xs text-zinc-500">
+                Copy into Gmail / Outlook — full format with subject
+              </p>
+            </div>
+            <p className="text-sm font-semibold text-zinc-800">
               Subject: {draft.subject}
             </p>
-            <pre className="mt-2 whitespace-pre-wrap font-sans text-zinc-700">
+            <pre className="mt-3 flex-1 whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-700">
               {draft.body}
             </pre>
             <button
               type="button"
-              className="mt-2 text-xs font-medium underline"
+              className="mt-3 w-full rounded-lg border border-zinc-400 bg-white py-2 text-xs font-semibold hover:bg-zinc-100"
               onClick={() =>
                 navigator.clipboard.writeText(
                   `Subject: ${draft.subject}\n\n${draft.body}`,
                 )
               }
             >
-              Copy full email
+              Copy email
             </button>
           </div>
 
-          <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 text-sm">
-            <p className="font-semibold text-zinc-900">LinkedIn message</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              Paste into connection note or InMail ({draft.linkedInMessage.length}{" "}
-              chars)
-            </p>
-            <pre className="mt-2 whitespace-pre-wrap font-sans text-zinc-700">
+          <div className="flex flex-col rounded-xl border-2 border-[#0A66C2] bg-[#0A66C2]/5 p-4 shadow-sm">
+            <div className="mb-3 border-b border-[#0A66C2]/30 pb-2">
+              <p className="text-sm font-bold text-[#0A66C2]">LinkedIn message</p>
+              <p className="text-xs text-zinc-600">
+                Connection note or InMail — {draft.linkedInMessage.length} / 300
+                chars
+              </p>
+            </div>
+            <pre className="flex-1 whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-800">
               {draft.linkedInMessage}
             </pre>
             <button
               type="button"
-              className="mt-2 text-xs font-medium underline"
+              className="mt-3 w-full rounded-lg border border-[#0A66C2] bg-white py-2 text-xs font-semibold text-[#0A66C2] hover:bg-[#0A66C2]/10"
               onClick={() =>
                 navigator.clipboard.writeText(draft.linkedInMessage)
               }

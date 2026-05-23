@@ -2,6 +2,20 @@ import type { AtsBreakdown, JDTailorResult } from "@/lib/jd/types";
 
 export type ContactConfidence = "verified" | "likely" | "not_found";
 
+export type ContactCandidate = {
+  email?: string | null;
+  phone?: string | null;
+  source: string;
+  confidence: ContactConfidence;
+  score?: number;
+  detail?: string;
+};
+
+export type ContactResearch = {
+  sourcesChecked: string[];
+  candidates: ContactCandidate[];
+};
+
 export type CompanyInfo = {
   name: string;
   domain: string | null;
@@ -19,6 +33,7 @@ export type PersonResult = {
   source: string;
   matchedRole?: string;
   contactHints?: string[];
+  contactResearch?: ContactResearch;
 };
 
 export type ColdOutreachDraft = {

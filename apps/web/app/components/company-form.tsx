@@ -163,7 +163,7 @@ export function CompanyForm() {
           disabled={loading}
           className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-70"
         >
-          {loading ? "Searching careers portal… (30–90s)" : "Search company"}
+          {loading ? "Searching… (people + email research 30–90s)" : "Search company"}
         </button>
 
         {error && (
