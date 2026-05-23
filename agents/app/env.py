@@ -26,6 +26,7 @@ _KEYS_FROM_WEB_ENV = frozenset(
         "OLLAMA_MODEL",
         "OLLAMA_BASE_URL",
         "SERPAPI_API_KEY",
+        "SERPAPI_DISABLED",
         "HUNTER_API_KEY",
     }
 )
@@ -86,6 +87,23 @@ def get_llm_provider() -> str:
 
 def get_hunter_key() -> str:
     return _clean(os.environ.get("HUNTER_API_KEY"))
+
+
+def get_serpapi_key() -> str:
+    return _clean(os.environ.get("SERPAPI_API_KEY"))
+
+
+def is_serpapi_disabled() -> bool:
+    return _clean(os.environ.get("SERPAPI_DISABLED")).lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def serpapi_available() -> bool:
+    return bool(get_serpapi_key()) and not is_serpapi_disabled()
 
 
 # Load on import

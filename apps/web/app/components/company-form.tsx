@@ -1,20 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type { CompanyRunResult } from "@/lib/company/types";
+import type { ServiceConfig } from "@/lib/config/types";
 import { JobOpeningCard } from "@/app/components/job-opening-card";
+import { ManualOutreachPanel } from "@/app/components/manual-outreach-panel";
 import { PersonCard } from "@/app/components/person-card";
+import { ServiceStatusBanner } from "@/app/components/service-status-banner";
 import { downloadCompanyResultsCsv } from "@/lib/company/export-csv";
 import { PEOPLE_PER_ROLE, ROLE_GROUPS } from "@/lib/company/roles";
 import { getResumeSession, useResumeSession } from "@/lib/resume/session";
+import {
+  checkboxClass,
+  fieldInputClass,
+  fieldLabelClass,
+  roleOptionClass,
+} from "@/lib/ui/form-styles";
+
+type CompanyMode = "search" | "manual";
 
 export function CompanyForm() {
-  const resumeSession = useResumeSession();
+  const { session: resumeSession } = useResumeSession();
   const rolesRef = useRef<HTMLFieldSetElement>(null);
+  const [mode, setMode] = useState<CompanyMode>("manual");
+  const [serpapiAvailable, setSerpapiAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CompanyRunResult | null>(null);
+
+  useEffect(() => {
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((data: ServiceConfig) => {
+        const available = data.serpapi?.available ?? false;
+        setSerpapiAvailable(available);
+        setMode(available ? "search" : "manual");
+      })
+      .catch(() => {
+        setSerpapiAvailable(false);
+        setMode("manual");
+      });
+  }, []);
 
   function setAllRoles(checked: boolean) {
     rolesRef.current
@@ -64,24 +91,65 @@ export function CompanyForm() {
     }
   }
 
+  function tabClass(active: boolean) {
+    return active
+      ? "border-zinc-900 bg-zinc-900 text-white"
+      : "border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50";
+  }
+
   return (
-    <>
+    <div className="flex flex-col gap-8">
       <div>
-        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-800">
-          ← Back
-        </Link>
-        <h1 className="mt-4 text-2xl font-semibold text-zinc-900">
-          Company search
-        </h1>
+        <h1 className="text-2xl font-semibold text-zinc-900">Company</h1>
         <p className="mt-2 text-zinc-600">
-          <strong>People:</strong> up to {PEOPLE_PER_ROLE} <strong>senior</strong>{" "}
-          LinkedIn profiles per role you pick — only that role or close equivalents
-          (e.g. AI Engineer → ML / GenAI / Head of AI). Ranked Director / Head /
-          Principal first. <strong>Jobs:</strong> careers portal is found automatically
-          (company site, Greenhouse, Lever). ATS % and tailoring need a resume on home.
+          Automated search finds LinkedIn people and careers jobs (SerpAPI). Manual
+          outreach lets you add contacts yourself and still draft email + LinkedIn.
         </p>
       </div>
 
+      <ServiceStatusBanner />
+
+      <div
+        className="flex flex-wrap gap-2"
+        role="tablist"
+        aria-label="Company mode"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "search"}
+          onClick={() => setMode("search")}
+          className={`rounded-lg border px-4 py-2 text-sm font-semibold ${tabClass(mode === "search")}`}
+        >
+          Automated search
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "manual"}
+          onClick={() => setMode("manual")}
+          className={`rounded-lg border px-4 py-2 text-sm font-semibold ${tabClass(mode === "manual")}`}
+        >
+          Manual outreach
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-6">
+      {mode === "manual" && <ManualOutreachPanel />}
+
+      {mode === "search" && !serpapiAvailable && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Automated search is off. Add{" "}
+          <code className="rounded bg-amber-100 px-1">SERPAPI_API_KEY</code> to{" "}
+          <code className="rounded bg-amber-100 px-1">apps/web/.env</code>, or set{" "}
+          <code className="rounded bg-amber-100 px-1">SERPAPI_DISABLED=false</code>{" "}
+          when your quota resets. Use <strong>Manual outreach</strong> in the
+          meantime.
+        </p>
+      )}
+
+      {mode === "search" && (
+        <>
       {!resumeSession && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <Link href="/" className="font-medium underline">
@@ -96,10 +164,7 @@ export function CompanyForm() {
         className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
       >
         <div>
-          <label
-            htmlFor="company"
-            className="block text-sm font-medium text-zinc-800"
-          >
+          <label htmlFor="company" className={fieldLabelClass}>
             Company name
           </label>
           <input
@@ -108,12 +173,12 @@ export function CompanyForm() {
             type="text"
             required
             placeholder="e.g. Stripe, Anthropic, Databricks"
-            className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-zinc-900 outline-none focus:ring-2 focus:ring-emerald-600"
+            className={fieldInputClass}
           />
         </div>
 
         <fieldset ref={rolesRef}>
-          <legend className="text-sm font-medium text-zinc-800">
+          <legend className={fieldLabelClass}>
             Job roles (optional filters)
           </legend>
           <p className="mt-1 text-xs text-zinc-500">
@@ -144,11 +209,13 @@ export function CompanyForm() {
                 </p>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {roles.map((role) => (
-                    <label
-                      key={role}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50"
-                    >
-                      <input type="checkbox" name="roles" value={role} />
+                    <label key={role} className={roleOptionClass}>
+                      <input
+                        type="checkbox"
+                        name="roles"
+                        value={role}
+                        className={checkboxClass}
+                      />
                       {role}
                     </label>
                   ))}
@@ -160,10 +227,12 @@ export function CompanyForm() {
 
         <button
           type="submit"
-          disabled={loading}
-          className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-70"
+          disabled={loading || !serpapiAvailable}
+          className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? "Searching… (people + email research 30–90s)" : "Search company"}
+          {loading
+            ? "Searching… (people + email research 30–90s)"
+            : "Search company"}
         </button>
 
         {error && (
@@ -223,7 +292,7 @@ export function CompanyForm() {
                       <h3 className="text-sm font-semibold text-emerald-800">
                         {role} ({list.length})
                       </h3>
-                      <ul className="mt-4 space-y-0">
+                      <div className="mt-4 space-y-0">
                         {list.map((p) => (
                           <PersonCard
                             key={`${role}-${p.linkedinUrl ?? p.name}`}
@@ -232,7 +301,7 @@ export function CompanyForm() {
                             companyDomain={result.company.domain}
                           />
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   ) : null,
                 )}
@@ -240,7 +309,7 @@ export function CompanyForm() {
             ) : result.people.length === 0 ? (
               <p className="mt-2 text-sm text-zinc-500">No people found.</p>
             ) : (
-              <ul className="mt-4">
+              <div className="mt-4 space-y-0">
                 {result.people.map((p) => (
                   <PersonCard
                     key={`${p.name}-${p.title}`}
@@ -249,7 +318,7 @@ export function CompanyForm() {
                     companyDomain={result.company.domain}
                   />
                 ))}
-              </ul>
+              </div>
             )}
           </section>
 
@@ -281,6 +350,9 @@ export function CompanyForm() {
           </section>
         </div>
       )}
-    </>
+        </>
+      )}
+      </div>
+    </div>
   );
 }

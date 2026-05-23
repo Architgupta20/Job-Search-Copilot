@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ColdOutreachDraft, PersonResult } from "@/lib/company/types";
 import { getResumeSession } from "@/lib/resume/session";
+import { addApplicationFromContact } from "@/lib/tracker/storage";
 
 function ConfidenceBadge({ value }: { value: string }) {
   const styles: Record<string, string> = {
@@ -36,6 +37,7 @@ export function PersonCard({
   const [showResearch, setShowResearch] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [linkedInOpen, setLinkedInOpen] = useState(false);
+  const [trackerMsg, setTrackerMsg] = useState<string | null>(null);
   const isLoading = loadingWhich !== null;
 
   const research = person.contactResearch;
@@ -100,8 +102,23 @@ export function PersonCard({
     if (d) setLinkedInOpen(true);
   }
 
+  function saveToTracker() {
+    const { duplicate } = addApplicationFromContact({
+      company: companyName,
+      role: person.matchedRole || person.title,
+      contactName: person.name,
+      contactLinkedIn: person.linkedinUrl,
+      contactEmail: person.email,
+      status: "saved",
+    });
+    setTrackerMsg(
+      duplicate ? "Already in tracker." : "Saved to tracker — open Tracker in the menu.",
+    );
+    window.setTimeout(() => setTrackerMsg(null), 4000);
+  }
+
   return (
-    <li className="mb-5 list-none rounded-xl border border-zinc-200 bg-white p-5 shadow-sm last:mb-0">
+    <article className="mb-5 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm last:mb-0">
       <p className="font-medium text-zinc-900">{person.name}</p>
       <p className="text-sm text-zinc-600">{person.title}</p>
       {person.matchedRole && (
@@ -210,7 +227,18 @@ export function PersonCard({
               ? "Close LinkedIn"
               : "Draft LinkedIn"}
         </button>
+        <button
+          type="button"
+          onClick={saveToTracker}
+          className="rounded-lg border border-emerald-600 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-50"
+        >
+          Save to tracker
+        </button>
       </div>
+
+      {trackerMsg && (
+        <p className="mt-2 text-xs font-medium text-emerald-800">{trackerMsg}</p>
+      )}
 
       {error && (
         <p
@@ -271,6 +299,6 @@ export function PersonCard({
           </button>
         </div>
       )}
-    </li>
+    </article>
   );
 }

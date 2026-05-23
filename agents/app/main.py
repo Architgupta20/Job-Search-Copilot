@@ -5,7 +5,17 @@ import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.env import WEB_ENV_FILE, get_env_path, get_groq_key, get_llm_provider
+from app.env import (
+    WEB_ENV_FILE,
+    get_env_path,
+    get_groq_key,
+    get_hunter_key,
+    get_llm_provider,
+    get_openai_key,
+    get_serpapi_key,
+    is_serpapi_disabled,
+    serpapi_available,
+)
 from app.routers import company, jd, resume
 from app.services.llm.client import _provider
 
@@ -46,6 +56,32 @@ def health():
         "status": "ok",
         "service": "agents",
         "envFile": str(WEB_ENV_FILE) if WEB_ENV_FILE.is_file() else None,
+    }
+
+
+@app.get("/health/services")
+def health_services():
+    """Which integrations are configured (no secrets returned)."""
+    provider = get_llm_provider() or "groq"
+    groq_ok = bool(get_groq_key())
+    llm_ready = provider == "ollama" or (provider == "groq" and groq_ok) or (
+        provider == "openai" and bool(get_openai_key())
+    )
+    serp_key = bool(get_serpapi_key())
+    serp_disabled = is_serpapi_disabled()
+    return {
+        "llm": {
+            "provider": provider,
+            "configured": llm_ready,
+        },
+        "serpapi": {
+            "configured": serp_key,
+            "disabled": serp_disabled,
+            "available": serpapi_available(),
+        },
+        "hunter": {
+            "configured": bool(get_hunter_key()),
+        },
     }
 
 

@@ -4,6 +4,11 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import type { JDTailorResult } from "@/lib/jd/types";
 import { getResumeSession } from "@/lib/resume/session";
+import {
+  checkboxClass,
+  fieldLabelClass,
+  fieldTextareaClass,
+} from "@/lib/ui/form-styles";
 
 function AtsScoreCard({ result }: { result: JDTailorResult }) {
   const ats = result.atsBreakdown;
@@ -131,7 +136,7 @@ export function JDForm() {
         className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
       >
         <div>
-          <label htmlFor="jd" className="block text-sm font-medium text-zinc-800">
+          <label htmlFor="jd" className={fieldLabelClass}>
             Job description
           </label>
           <textarea
@@ -140,12 +145,17 @@ export function JDForm() {
             rows={12}
             required
             placeholder="Paste the full job description here..."
-            className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-zinc-900 outline-none focus:ring-2 focus:ring-emerald-600"
+            className={fieldTextareaClass}
           />
         </div>
 
-        <label className="flex items-start gap-2 text-sm text-zinc-600">
-          <input type="checkbox" name="confirm" required className="mt-1" />
+        <label className="flex items-start gap-2 text-sm text-zinc-800">
+          <input
+            type="checkbox"
+            name="confirm"
+            required
+            className={`${checkboxClass} mt-0.5`}
+          />
           I confirm my resume only contains accurate information.
         </label>
 
@@ -239,7 +249,7 @@ export function JDForm() {
               value={editableText}
               onChange={(e) => setEditableText(e.target.value)}
               rows={16}
-              className="mt-4 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-800 outline-none focus:ring-2 focus:ring-emerald-600"
+              className={`${fieldTextareaClass} mt-4 font-mono`}
             />
           </section>
 

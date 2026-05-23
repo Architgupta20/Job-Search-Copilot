@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
-import { clearResumeSession, saveResumeSession } from "@/lib/resume/session";
+import { useEffect, useRef, useState } from "react";
+import {
+  clearResumeSession,
+  getResumeSession,
+  saveResumeSession,
+} from "@/lib/resume/session";
 
 type Step = "upload" | "choose-path";
 
@@ -20,6 +24,20 @@ export function HomeFlow() {
   const [uploadMeta, setUploadMeta] = useState<UploadResult | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const existing = getResumeSession();
+    if (existing) {
+      setUploadMeta({
+        id: existing.id,
+        fileName: existing.fileName,
+        claimCount: 0,
+        contact: {},
+      });
+      setFileName(existing.fileName);
+      setStep("choose-path");
+    }
+  }, []);
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -137,10 +155,12 @@ export function HomeFlow() {
             <p>
               Saved: <span className="font-medium">{uploadMeta.fileName}</span>
             </p>
-            <p className="mt-1 text-emerald-800">
-              Parsed {uploadMeta.claimCount} factual lines for tailoring
-              (nothing invented).
-            </p>
+            {uploadMeta.claimCount > 0 && (
+              <p className="mt-1 text-emerald-800">
+                Parsed {uploadMeta.claimCount} factual lines for tailoring
+                (nothing invented).
+              </p>
+            )}
             <button
               type="button"
               className="mt-2 underline hover:no-underline"
@@ -154,7 +174,7 @@ export function HomeFlow() {
             Step 2 — Choose path
           </h2>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Link
               href="/company"
               className="group rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-zinc-400 hover:shadow-md"
@@ -163,8 +183,8 @@ export function HomeFlow() {
                 Company name
               </h3>
               <p className="mt-2 text-sm text-zinc-600">
-                LinkedIn people + job openings for this company. No resume
-                upload required — pick one or more roles.
+                Find people and jobs (needs SerpAPI), or use manual outreach
+                when search quota is out.
               </p>
             </Link>
 
@@ -178,6 +198,19 @@ export function HomeFlow() {
               <p className="mt-2 text-sm text-zinc-600">
                 Tailor your resume to the JD using only facts from your resume,
                 then download.
+              </p>
+            </Link>
+
+            <Link
+              href="/tracker"
+              className="group rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-zinc-400 hover:shadow-md sm:col-span-2 lg:col-span-1"
+            >
+              <h3 className="font-semibold text-zinc-900 group-hover:text-emerald-800">
+                Application tracker
+              </h3>
+              <p className="mt-2 text-sm text-zinc-600">
+                Track companies, roles, contacts, and status — saved on this
+                device.
               </p>
             </Link>
           </div>
