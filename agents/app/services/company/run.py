@@ -68,27 +68,90 @@ def _company_aliases(company: str) -> set[str]:
 
 
 def _person_works_at_company(serp_title: str, snippet: str, company: str) -> bool:
-    """Require company name in the LinkedIn result title (not snippet alone)."""
+    """
+    Google LinkedIn hits often use title 'Name | LinkedIn' and put employer in the snippet.
+    Accept company in title, employer segment, or snippet (for linkedin.com/in URLs).
+    """
     aliases = _company_aliases(company)
     title_lower = serp_title.lower()
-    if any(a in title_lower for a in aliases):
+    snippet_lower = (snippet or "").lower()
+    blob = f"{title_lower} {snippet_lower}"
+
+    if any(len(a) >= 3 and a in title_lower for a in aliases):
         return True
-    # Allow snippet only if title also has a clear employer segment (Name - Role - Co)
+
     parts = [p.strip() for p in serp_title.split("-") if p.strip()]
     if len(parts) >= 3:
         employer = parts[-1].split("|")[0].strip().lower()
         if any(a in employer for a in aliases):
             return True
+
+    # Typical Google format: company only in snippet ("… at Razorpay · …")
+    if any(len(a) >= 3 and a in blob for a in aliases):
+        if "linkedin" in title_lower or "linkedin.com/in" in blob:
+            return True
     return False
 
 
+def _is_current_employee(snippet: str, serp_title: str, company_name: str) -> bool:
+    """Drop ex-employees; keep profiles that look like current roles at the company."""
+    blob = f"{snippet} {serp_title}"
+    low = blob.lower()
+    aliases = _company_aliases(company_name)
+
+    if not any(len(a) >= 3 and a in low for a in aliases):
+        return False
+
+    if re.search(r"\b(present|currently|current role|–\s*present|to present)\b", low):
+        return True
+
+    for alias in aliases:
+        if len(alias) < 3:
+            continue
+        for m in re.finditer(re.escape(alias), low):
+            window = low[max(0, m.start() - 45) : m.end() + 55]
+            if re.search(
+                r"former|ex-employee|ex employee|previously at|past:\s*|"
+                r"used to work|until \d{4}|left in \d{4}",
+                window,
+            ):
+                continue
+            if re.search(rf"\bat\s+{re.escape(alias)}\b", window):
+                before = low[max(0, m.start() - 35) : m.start()]
+                if re.search(r"former|ex-|previously", before):
+                    continue
+                return True
+
+    if re.search(r"\b(former|ex-|previously at|past employee)\b", low):
+        return False
+
+    return True
+
+
 def _linkedin_job_title(serp_title: str, snippet: str) -> str:
+    snip = snippet or ""
+    at_match = re.search(
+        r"(?:^|[.;]\s*)(?:In my role as\s+)?([^·|]{2,80}?)\s+at\s+",
+        snip,
+        re.I,
+    )
+    if at_match:
+        title = at_match.group(1).strip()
+        title = re.sub(
+            r"^(in my role as|my role as|working as|as an?|as)\s+",
+            "",
+            title,
+            flags=re.I,
+        )
+        if title and "linkedin" not in title.lower():
+            return title[:120]
+
     parts = [p.strip() for p in serp_title.split("-") if p.strip()]
     if len(parts) >= 2:
         role = parts[1].split("|")[0].strip()
         if role and "linkedin" not in role.lower():
             return role[:120]
-    return snippet[:100] if snippet else "Professional"
+    return "Professional"
 
 
 def _parse_person(item: dict, company_name: str, matched_role: str) -> dict | None:
@@ -99,11 +162,14 @@ def _parse_person(item: dict, company_name: str, matched_role: str) -> dict | No
     snippet = item.get("snippet", "")
     if not _person_works_at_company(title, snippet, company_name):
         return None
+    if not _is_current_employee(snippet, title, company_name):
+        return None
     name = title.split("-")[0].split("|")[0].strip()
     if len(name) < 3:
         return None
     job_title = _linkedin_job_title(title, snippet)
-    if not title_matches_role(job_title, matched_role):
+    role_blob = f"{job_title} {title} {snippet}"
+    if not title_matches_role(role_blob, matched_role):
         return None
 
     return {
@@ -144,33 +210,53 @@ async def discover_people_for_roles(
                 if senior:
                     title_clause = f"({titles} OR {senior})"
 
-                q = (
-                    f'site:linkedin.com/in "{company_name}" '
-                    f"{title_clause} "
-                    '-intitle:"jobs" -intitle:"job"'
-                )
-                res = await client.get(
-                    "https://serpapi.com/search.json",
-                    params={
-                        "engine": "google",
-                        "q": q,
-                        "num": 30,
-                        "api_key": key,
-                    },
-                )
-                if res.status_code != 200:
-                    warnings.append(f"SerpAPI failed for role: {role}")
-                    continue
+                queries = [
+                    f"site:linkedin.com/in {company_name} {role}",
+                    f'site:linkedin.com/in "{company_name}" "{role}"',
+                    (
+                        f'site:linkedin.com/in "{company_name}" {title_clause} '
+                        '-intitle:"jobs" -intitle:"job"'
+                    ),
+                ]
 
                 candidates: list[dict] = []
-                for item in res.json().get("organic_results", []):
-                    person = _parse_person(item, company_name, role)
-                    if not person:
-                        continue
-                    link = person["linkedinUrl"]
-                    if link in seen_links:
-                        continue
-                    candidates.append(person)
+                candidate_links: set[str] = set()
+
+                for q in queries:
+                    for start in (0, 10):
+                        res = await client.get(
+                            "https://serpapi.com/search.json",
+                            params={
+                                "engine": "google",
+                                "q": q,
+                                "num": 10,
+                                "start": start,
+                                "api_key": key,
+                            },
+                        )
+                        if res.status_code != 200:
+                            if start == 0:
+                                warnings.append(f"SerpAPI failed for role: {role}")
+                            break
+
+                        batch = res.json().get("organic_results", [])
+                        if not batch:
+                            break
+
+                        for item in batch:
+                            person = _parse_person(item, company_name, role)
+                            if not person:
+                                continue
+                            link = person["linkedinUrl"]
+                            if link in candidate_links:
+                                continue
+                            candidate_links.add(link)
+                            candidates.append(person)
+
+                        if len(candidates) >= PEOPLE_PER_ROLE + 8:
+                            break
+                    if len(candidates) >= PEOPLE_PER_ROLE + 8:
+                        break
 
                 candidates.sort(
                     key=lambda p: p.get("seniorityRank", 0),
@@ -201,8 +287,8 @@ async def discover_people_for_roles(
     total_expected = PEOPLE_PER_ROLE * len(target_roles)
     warnings.insert(
         0,
-        "People are ranked by seniority (Director / Head / Principal / Lead first) "
-        f"and filtered to {', '.join(target_roles)} or equivalent titles only.",
+        "People: current employees only (ex-employees filtered out), via Google-indexed LinkedIn — "
+        "ranked senior-first for your role or equivalents.",
     )
     if people:
         warnings.append(

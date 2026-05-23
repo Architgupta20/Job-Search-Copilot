@@ -59,17 +59,16 @@ def _name_parts(full_name: str) -> tuple[str, str]:
     return "", ""
 
 
-def _email_ok(email: str, domain: str | None, person_name: str) -> bool:
+def _email_ok(email: str, domain: str | None, person_name: str, *, from_hunter: bool = False) -> bool:
     low = email.lower()
     if any(j in low for j in JUNK_EMAIL_PARTS):
         return False
-    if domain and not low.endswith(f"@{domain}") and domain not in low.split("@")[-1]:
-        # Prefer company domain but allow close matches from search
-        pass
+    if from_hunter:
+        return True
     first, last = _name_parts(person_name)
     local = low.split("@")[0]
     if first and first.lower() not in local and last and last.lower() not in local:
-        if domain and domain in low:
+        if domain and domain in low.split("@")[-1]:
             return True
         return False
     return True

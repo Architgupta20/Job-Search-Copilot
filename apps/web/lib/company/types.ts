@@ -40,6 +40,7 @@ export type ColdOutreachDraft = {
   subject: string;
   body: string;
   linkedInMessage: string;
+  companyAngle?: string;
   warning?: string;
   source?: string;
 };

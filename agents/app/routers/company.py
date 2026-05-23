@@ -70,6 +70,7 @@ class ColdEmailBody(BaseModel):
     personTitle: str
     matchedRole: str | None = None
     resumeId: str | None = None
+    companyDomain: str | None = None
 
 
 @router.post("/cold-email")
@@ -85,6 +86,7 @@ async def cold_email(body: ColdEmailBody):
             body.personTitle.strip(),
             body.matchedRole,
             resume_id=body.resumeId,
+            company_domain=body.companyDomain,
         )
     except Exception as e:
         raise HTTPException(500, str(e)) from e

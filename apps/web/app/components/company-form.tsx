@@ -174,17 +174,7 @@ export function CompanyForm() {
       </form>
 
       {result && (
-        <div className="space-y-8">
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => downloadCompanyResultsCsv(result)}
-              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50"
-            >
-              Download CSV
-            </button>
-          </div>
-
+        <div className="mt-10 space-y-8">
           {result.warnings.length > 0 && (
             <ul className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               {result.warnings.map((w) => (
@@ -192,6 +182,16 @@ export function CompanyForm() {
               ))}
             </ul>
           )}
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => downloadCompanyResultsCsv(result)}
+              className="rounded-xl border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow-sm hover:bg-zinc-50"
+            >
+              Download CSV
+            </button>
+          </div>
 
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-zinc-900">Company</h2>
@@ -223,12 +223,13 @@ export function CompanyForm() {
                       <h3 className="text-sm font-semibold text-emerald-800">
                         {role} ({list.length})
                       </h3>
-                      <ul className="mt-2 divide-y divide-zinc-100">
+                      <ul className="mt-4 space-y-0">
                         {list.map((p) => (
                           <PersonCard
                             key={`${role}-${p.linkedinUrl ?? p.name}`}
                             person={p}
                             companyName={result.company.name}
+                            companyDomain={result.company.domain}
                           />
                         ))}
                       </ul>
@@ -239,12 +240,13 @@ export function CompanyForm() {
             ) : result.people.length === 0 ? (
               <p className="mt-2 text-sm text-zinc-500">No people found.</p>
             ) : (
-              <ul className="mt-4 divide-y divide-zinc-100">
+              <ul className="mt-4">
                 {result.people.map((p) => (
                   <PersonCard
                     key={`${p.name}-${p.title}`}
                     person={p}
                     companyName={result.company.name}
+                    companyDomain={result.company.domain}
                   />
                 ))}
               </ul>

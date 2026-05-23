@@ -9,54 +9,32 @@ function esc(value: string | number | null | undefined): string {
 }
 
 export function buildCompanyResultsCsv(result: CompanyRunResult): string {
-  const lines: string[] = [];
-  lines.push(
-    [
-      "type",
-      "company",
-      "name_or_title",
-      "subtitle",
-      "url",
-      "role",
-      "ats_percent",
-      "email",
-      "linkedin",
-    ].join(","),
-  );
+  const headers = [
+    "serial no",
+    "company name",
+    "person name",
+    "role",
+    "linkedin url",
+    "email id",
+    "contact number",
+  ];
 
+  const lines: string[] = [headers.join(",")];
   const company = result.company.name;
 
-  for (const p of result.people) {
+  result.people.forEach((p, index) => {
     lines.push(
       [
-        "person",
+        index + 1,
         esc(company),
         esc(p.name),
         esc(p.title),
-        esc(p.linkedinUrl),
-        esc(p.matchedRole),
-        "",
-        esc(p.email),
-        esc(p.linkedinUrl),
+        esc(p.linkedinUrl ?? ""),
+        esc(p.email ?? ""),
+        esc(p.phone ?? ""),
       ].join(","),
     );
-  }
-
-  for (const j of result.jobs) {
-    lines.push(
-      [
-        "job",
-        esc(company),
-        esc(j.title),
-        esc(j.snippet),
-        esc(j.url),
-        esc(j.matchedRole),
-        j.atsScorePercent ?? "",
-        "",
-        "",
-      ].join(","),
-    );
-  }
+  });
 
   return lines.join("\n");
 }
@@ -67,7 +45,7 @@ export function downloadCompanyResultsCsv(result: CompanyRunResult) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${result.company.name.replace(/[^a-z0-9]+/gi, "-")}-search.csv`;
+  a.download = `${result.company.name.replace(/[^a-z0-9]+/gi, "-")}-people.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
