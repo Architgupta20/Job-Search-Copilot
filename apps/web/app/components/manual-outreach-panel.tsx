@@ -7,6 +7,7 @@ import { PersonCard } from "@/app/components/person-card";
 import { downloadCompanyResultsCsv } from "@/lib/company/export-csv";
 import { useResumeSession } from "@/lib/resume/session";
 import { fieldInputClass, fieldLabelSmClass } from "@/lib/ui/form-styles";
+import { addApplicationFromContact } from "@/lib/tracker/storage";
 
 export function ManualOutreachPanel() {
   const { session: resumeSession } = useResumeSession();
@@ -14,6 +15,7 @@ export function ManualOutreachPanel() {
   const [companyDomain, setCompanyDomain] = useState("");
   const [people, setPeople] = useState<PersonResult[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [trackerNotice, setTrackerNotice] = useState<string | null>(null);
 
   function onAddPerson(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -41,6 +43,22 @@ export function ManualOutreachPanel() {
       email: email || undefined,
       matchedRole: matchedRole || undefined,
     });
+
+    const { duplicate } = addApplicationFromContact({
+      company: companyName.trim(),
+      role: matchedRole || title,
+      contactName: name,
+      contactLinkedIn: linkedinUrl || null,
+      contactEmail: email || null,
+      status: "saved",
+    });
+
+    setTrackerNotice(
+      duplicate
+        ? "Already in Application tracker — contact added here for drafts."
+        : "Added to Application tracker (status: Saved). Open Tracker to log email sent or draft follow-up.",
+    );
+    window.setTimeout(() => setTrackerNotice(null), 6000);
 
     setPeople((prev) => [...prev, person]);
     e.currentTarget.reset();
@@ -70,9 +88,10 @@ export function ManualOutreachPanel() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-zinc-600">
-        Add people you found on LinkedIn yourself. Draft{" "}
-        <strong>cold email</strong> and <strong>LinkedIn</strong> messages without
-        SerpAPI. Upload a resume on home for richer copy.
+        Add people you found on LinkedIn yourself. Each contact is{" "}
+        <strong>saved to Application tracker</strong> automatically. Draft{" "}
+        <strong>cold email</strong> and <strong>LinkedIn</strong> below. Upload a
+        resume on home for richer copy.
       </p>
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -169,11 +188,16 @@ export function ManualOutreachPanel() {
             {formError}
           </p>
         )}
+        {trackerNotice && (
+          <p className="mt-3 text-sm font-medium text-emerald-800" role="status">
+            {trackerNotice}
+          </p>
+        )}
         <button
           type="submit"
           className="mt-4 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
         >
-          Add to list
+          Add contact + tracker
         </button>
       </form>
 
@@ -205,6 +229,7 @@ export function ManualOutreachPanel() {
                   person={p}
                   companyName={companyName.trim()}
                   companyDomain={companyDomain.trim() || null}
+                  showSaveToTracker={false}
                 />
               </div>
             ))}
