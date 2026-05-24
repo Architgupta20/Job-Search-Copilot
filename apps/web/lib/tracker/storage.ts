@@ -32,7 +32,11 @@ export function loadApplications(): ApplicationEntry[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as ApplicationEntry[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.sort(
+    const normalized = parsed.map((e) => ({
+      ...e,
+      outreachSentAt: e.outreachSentAt ?? null,
+    }));
+    return normalized.sort(
       (a, b) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
@@ -58,6 +62,7 @@ export function addApplication(input: ApplicationInput): ApplicationEntry {
     contactEmail: input.contactEmail?.trim() || null,
     status: input.status ?? "saved",
     notes: input.notes?.trim() ?? "",
+    outreachSentAt: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -78,6 +83,7 @@ export function updateApplication(
       | "contactEmail"
       | "status"
       | "notes"
+      | "outreachSentAt"
     >
   >,
 ): ApplicationEntry | null {
@@ -104,6 +110,10 @@ export function updateApplication(
         ? patch.contactEmail?.trim() || null
         : current.contactEmail,
     notes: patch.notes !== undefined ? patch.notes.trim() : current.notes,
+    outreachSentAt:
+      patch.outreachSentAt !== undefined
+        ? patch.outreachSentAt
+        : current.outreachSentAt,
     updatedAt: new Date().toISOString(),
   };
 
@@ -115,6 +125,15 @@ export function updateApplication(
 
 export function deleteApplication(id: string): void {
   persist(loadApplications().filter((e) => e.id !== id));
+}
+
+/** Record that first outreach was sent (starts follow-up clock). */
+export function markOutreachSent(id: string): ApplicationEntry | null {
+  const now = new Date().toISOString();
+  return updateApplication(id, {
+    outreachSentAt: now,
+    status: "applied",
+  });
 }
 
 export function setApplicationStatus(

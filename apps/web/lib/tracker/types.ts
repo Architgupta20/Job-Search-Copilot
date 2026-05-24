@@ -18,6 +18,8 @@ export type ApplicationEntry = {
   contactEmail: string | null;
   status: ApplicationStatus;
   notes: string;
+  /** When you sent the first outreach email (for follow-up timing). */
+  outreachSentAt: string | null;
   createdAt: string;
   updatedAt: string;
 };

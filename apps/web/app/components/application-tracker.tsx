@@ -10,8 +10,17 @@ import {
 import {
   addApplication,
   deleteApplication,
+  markOutreachSent,
   updateApplication,
 } from "@/lib/tracker/storage";
+import {
+  buildFollowUpDraft,
+  daysSince,
+  DEFAULT_FOLLOW_UP_DAYS,
+  followUpSuggested,
+  getOutreachSentAt,
+  type FollowUpDraft,
+} from "@/lib/tracker/follow-up";
 import { downloadApplicationsCsv } from "@/lib/tracker/export-csv";
 import { useApplications } from "@/lib/tracker/use-applications";
 import {
@@ -53,9 +62,32 @@ function ApplicationRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [notes, setNotes] = useState(entry.notes);
+  const [followUpOpen, setFollowUpOpen] = useState(false);
+  const [followUp, setFollowUp] = useState<FollowUpDraft | null>(null);
+
+  const sentAt = getOutreachSentAt(entry);
+  const due = followUpSuggested(entry);
+  const canFollowUp =
+    entry.status === "applied" ||
+    entry.status === "saved" ||
+    Boolean(sentAt);
 
   function onStatusChange(status: ApplicationStatus) {
-    updateApplication(entry.id, { status });
+    const patch: Parameters<typeof updateApplication>[1] = { status };
+    if (status === "applied" && !entry.outreachSentAt) {
+      patch.outreachSentAt = new Date().toISOString();
+    }
+    updateApplication(entry.id, patch);
+    onChanged();
+  }
+
+  function openFollowUp() {
+    setFollowUp(buildFollowUpDraft(entry));
+    setFollowUpOpen(true);
+  }
+
+  function onMarkEmailSent() {
+    markOutreachSent(entry.id);
     onChanged();
   }
 
@@ -110,7 +142,19 @@ function ApplicationRow({
           )}
           <p className="mt-2 text-xs text-zinc-400">
             Updated {formatDate(entry.updatedAt)}
+            {sentAt && (
+              <>
+                {" "}
+                · First email logged {formatDate(sentAt)}
+                {daysSince(sentAt) > 0 && ` (${daysSince(sentAt)}d ago)`}
+              </>
+            )}
           </p>
+          {due && (
+            <p className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+              Follow up suggested — no reply in {DEFAULT_FOLLOW_UP_DAYS}+ days
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -127,6 +171,31 @@ function ApplicationRow({
               </option>
             ))}
           </select>
+          {!sentAt && (entry.status === "saved" || entry.status === "applied") && (
+            <button
+              type="button"
+              onClick={onMarkEmailSent}
+              className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-900 hover:bg-blue-100"
+            >
+              Log email sent
+            </button>
+          )}
+          {canFollowUp && (
+            <button
+              type="button"
+              onClick={() => {
+                if (followUpOpen) setFollowUpOpen(false);
+                else openFollowUp();
+              }}
+              className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
+                due
+                  ? "border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                  : "border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50"
+              }`}
+            >
+              {followUpOpen ? "Close follow-up" : "Draft follow-up"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setEditing((v) => !v)}
@@ -143,6 +212,49 @@ function ApplicationRow({
           </button>
         </div>
       </div>
+      {followUpOpen && followUp && (
+        <div className="mt-4 rounded-xl border-2 border-amber-200 bg-amber-50/40 p-4">
+          <p className="text-sm font-semibold text-zinc-900">Follow-up email</p>
+          <p className="mt-1 text-xs text-zinc-600">
+            Polite check-in after {followUp.daysSinceOutreach} day
+            {followUp.daysSinceOutreach === 1 ? "" : "s"}. Edit before sending.
+          </p>
+          <p className="mt-3 text-sm font-semibold text-zinc-900">
+            Subject: {followUp.subject}
+          </p>
+          <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-900">
+            {followUp.body}
+          </pre>
+          <p className="mt-4 text-xs font-semibold text-[#0A66C2]">
+            LinkedIn (short)
+          </p>
+          <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-zinc-900">
+            {followUp.linkedInMessage}
+          </pre>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-700"
+              onClick={() =>
+                navigator.clipboard.writeText(
+                  `Subject: ${followUp.subject}\n\n${followUp.body}`,
+                )
+              }
+            >
+              Copy email
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-[#0A66C2] px-3 py-2 text-xs font-semibold text-white hover:bg-[#004182]"
+              onClick={() =>
+                navigator.clipboard.writeText(followUp.linkedInMessage)
+              }
+            >
+              Copy LinkedIn
+            </button>
+          </div>
+        </div>
+      )}
       {editing && (
         <div className="mt-3 border-t border-zinc-100 pt-3">
           <label className={fieldLabelSmClass}>Notes</label>
@@ -226,8 +338,9 @@ export function ApplicationTracker() {
           Application tracker
         </h1>
         <p className="mt-2 text-sm text-zinc-600">
-          Track companies, roles, and outreach status. Saved on this device only
-          (your browser).
+          Track companies, roles, and outreach status. Log when you email someone,
+          then use <strong>Draft follow-up</strong> after {DEFAULT_FOLLOW_UP_DAYS}{" "}
+          days with no reply. Saved on this device only.
         </p>
       </div>
 
