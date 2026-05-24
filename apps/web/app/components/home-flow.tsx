@@ -1,12 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import {
-  clearResumeSession,
-  getResumeSession,
-  saveResumeSession,
-} from "@/lib/resume/session";
+import { useRef, useState } from "react";
+import { clearResumeSession, saveResumeSession } from "@/lib/resume/session";
 
 type Step = "upload" | "choose-path";
 
@@ -24,20 +20,6 @@ export function HomeFlow() {
   const [uploadMeta, setUploadMeta] = useState<UploadResult | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const existing = getResumeSession();
-    if (existing) {
-      setUploadMeta({
-        id: existing.id,
-        fileName: existing.fileName,
-        claimCount: 0,
-        contact: {},
-      });
-      setFileName(existing.fileName);
-      setStep("choose-path");
-    }
-  }, []);
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -109,8 +91,8 @@ export function HomeFlow() {
           Job Search Copilot
         </h1>
         <p className="text-zinc-600">
-          Upload your resume once, then find contacts and jobs at a company—or
-          tailor your resume to a job description.
+          Upload your resume each time you open the app (this tab). Then find
+          contacts and jobs at a company—or tailor to a job description.
         </p>
       </header>
 

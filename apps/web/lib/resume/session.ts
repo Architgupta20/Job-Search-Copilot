@@ -4,33 +4,18 @@ import { useEffect, useState } from "react";
 
 export const RESUME_ID_KEY = "job-search-copilot:resumeId";
 export const RESUME_NAME_KEY = "job-search-copilot:resumeName";
+const TAB_SESSION_KEY = "job-search-copilot:tab-session";
 
 /** Fired after save/clear so header and guards refresh in the same tab. */
 export const RESUME_SESSION_EVENT = "job-search-copilot:resume-session";
 
 export type ResumeSession = { id: string; fileName: string };
 
-function canUseStorage(): boolean {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-}
-
-/** One-time: copy old sessionStorage keys into localStorage. */
-function migrateFromSessionStorage(): void {
-  if (!canUseStorage()) return;
-  const hasLocal = localStorage.getItem(RESUME_ID_KEY);
-  if (hasLocal) return;
-  try {
-    const id = sessionStorage.getItem(RESUME_ID_KEY);
-    const fileName = sessionStorage.getItem(RESUME_NAME_KEY);
-    if (id && fileName) {
-      localStorage.setItem(RESUME_ID_KEY, id);
-      localStorage.setItem(RESUME_NAME_KEY, fileName);
-      sessionStorage.removeItem(RESUME_ID_KEY);
-      sessionStorage.removeItem(RESUME_NAME_KEY);
-    }
-  } catch {
-    /* ignore quota / private mode */
-  }
+function canUseSessionStorage(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.sessionStorage !== "undefined"
+  );
 }
 
 function notifyResumeSessionChanged(): void {
@@ -38,38 +23,53 @@ function notifyResumeSessionChanged(): void {
   window.dispatchEvent(new Event(RESUME_SESSION_EVENT));
 }
 
+/**
+ * Call once when the app loads in a new browser tab/window.
+ * Clears any resume from a previous visit so Home asks for upload again.
+ */
+export function initAppSession(): void {
+  if (!canUseSessionStorage()) return;
+  try {
+    if (!sessionStorage.getItem(TAB_SESSION_KEY)) {
+      sessionStorage.removeItem(RESUME_ID_KEY);
+      sessionStorage.removeItem(RESUME_NAME_KEY);
+      // Remove old localStorage resume from earlier versions
+      localStorage.removeItem(RESUME_ID_KEY);
+      localStorage.removeItem(RESUME_NAME_KEY);
+      sessionStorage.setItem(TAB_SESSION_KEY, "1");
+      notifyResumeSessionChanged();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function saveResumeSession(id: string, fileName: string) {
-  if (!canUseStorage()) return;
-  localStorage.setItem(RESUME_ID_KEY, id);
-  localStorage.setItem(RESUME_NAME_KEY, fileName);
+  if (!canUseSessionStorage()) return;
+  sessionStorage.setItem(RESUME_ID_KEY, id);
+  sessionStorage.setItem(RESUME_NAME_KEY, fileName);
   notifyResumeSessionChanged();
 }
 
 export function clearResumeSession() {
-  if (!canUseStorage()) return;
+  if (!canUseSessionStorage()) return;
+  sessionStorage.removeItem(RESUME_ID_KEY);
+  sessionStorage.removeItem(RESUME_NAME_KEY);
   localStorage.removeItem(RESUME_ID_KEY);
   localStorage.removeItem(RESUME_NAME_KEY);
-  try {
-    sessionStorage.removeItem(RESUME_ID_KEY);
-    sessionStorage.removeItem(RESUME_NAME_KEY);
-  } catch {
-    /* ignore */
-  }
   notifyResumeSessionChanged();
 }
 
 export function getResumeSession(): ResumeSession | null {
-  if (!canUseStorage()) return null;
-  migrateFromSessionStorage();
-  const id = localStorage.getItem(RESUME_ID_KEY);
-  const fileName = localStorage.getItem(RESUME_NAME_KEY);
+  if (!canUseSessionStorage()) return null;
+  const id = sessionStorage.getItem(RESUME_ID_KEY);
+  const fileName = sessionStorage.getItem(RESUME_NAME_KEY);
   if (!id || !fileName) return null;
   return { id, fileName };
 }
 
 export type ResumeSessionState = {
   session: ResumeSession | null;
-  /** False until localStorage has been read (avoids flashing "No resume"). */
   ready: boolean;
 };
 
@@ -81,6 +81,8 @@ export function useResumeSession(): ResumeSessionState {
   });
 
   useEffect(() => {
+    initAppSession();
+
     function refresh() {
       setState({ session: getResumeSession(), ready: true });
     }
@@ -88,11 +90,9 @@ export function useResumeSession(): ResumeSessionState {
     refresh();
 
     window.addEventListener(RESUME_SESSION_EVENT, refresh);
-    window.addEventListener("storage", refresh);
 
     return () => {
       window.removeEventListener(RESUME_SESSION_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
     };
   }, []);
 
