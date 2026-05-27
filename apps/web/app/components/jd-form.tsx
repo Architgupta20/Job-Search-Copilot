@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import type { JDTailorResult } from "@/lib/jd/types";
+import { groupEditsBySection } from "@/lib/jd/group-edits";
 import { getResumeSession } from "@/lib/resume/session";
 import {
   checkboxClass,
@@ -15,6 +16,7 @@ function AtsScoreCard({ result }: { result: JDTailorResult }) {
   const score = ats?.scorePercent ?? result.atsScorePercent;
   const matched = ats?.matchedKeywords ?? result.keywordsUsed;
   const missing = ats?.missingKeywords ?? result.keywordsSkipped;
+  const related = ats?.relatedMatchedKeywords ?? [];
 
   return (
     <section className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 p-6 shadow-sm">
@@ -42,6 +44,11 @@ function AtsScoreCard({ result }: { result: JDTailorResult }) {
           <p className="mt-1 text-sm text-zinc-700">
             {matched.length > 0 ? matched.join(", ") : "—"}
           </p>
+          {related.length > 0 && (
+            <p className="mt-2 text-xs text-zinc-600">
+              Related-term matches: {related.join(", ")}
+            </p>
+          )}
         </div>
         <div>
           <h3 className="text-sm font-medium text-amber-900">Missing (not in resume)</h3>
@@ -125,6 +132,7 @@ export function JDForm() {
   const changeSummary = Array.isArray(result?.changeSummary)
     ? result.changeSummary
     : [];
+  const groupedEdits = groupEditsBySection(suggestedEdits);
 
   return (
     <>
@@ -204,75 +212,77 @@ export function JDForm() {
           )}
 
           {suggestedEdits.length > 0 && (
+            <section className="space-y-6">
+              {groupedEdits.map(([section, items]) => (
+                <div
+                  key={section}
+                  className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+                >
+                  <h2 className="text-lg font-semibold text-zinc-900">
+                    Section: {section}
+                  </h2>
+                  <div className="mt-4 space-y-6">
+                    {items.map((edit) => (
+                      <div
+                        key={`${section}-${edit.bulletNumber}-${edit.original.slice(0, 24)}`}
+                        className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-4"
+                      >
+                        <p className="text-sm font-bold text-zinc-900">
+                          Bullet Point {edit.bulletNumber ?? 1}
+                        </p>
+                        <div className="mt-3 space-y-2 text-sm">
+                          <p>
+                            <span className="font-semibold text-zinc-800">
+                              Original:
+                            </span>{" "}
+                            {edit.original}
+                          </p>
+                          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-medium text-zinc-900">
+                            <span className="font-semibold text-emerald-800">
+                              Rewritten (17–19 words):
+                            </span>{" "}
+                            {edit.suggested}
+                          </p>
+                          <p>
+                            <span className="font-semibold text-zinc-800">
+                              JD Keywords Added:
+                            </span>{" "}
+                            {edit.jdKeywordsAdded?.length
+                              ? edit.jdKeywordsAdded.join(", ")
+                              : "—"}
+                          </p>
+                          <p>
+                            <span className="font-semibold text-zinc-800">
+                              Word Count:
+                            </span>{" "}
+                            {edit.wordCount ?? "—"}
+                          </p>
+                          <p>
+                            <span className="font-semibold text-zinc-800">
+                              Reason for Change:
+                            </span>{" "}
+                            {edit.reasonForChange || edit.reason}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {result.tailoringReport && (
             <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-zinc-900">
-                Resume edits — {suggestedEdits.length} bullets to update
+                Full tailoring report (copy format)
               </h2>
-              <p className="mt-1 text-sm text-zinc-500">
-                Each card shows which <strong>resume section</strong> the bullet came from, your current text, and the rewrite. Paste the green text into that section in Word.
-              </p>
-              <ol className="mt-4 space-y-5">
-                {suggestedEdits.map((edit, i) => (
-                  <li
-                    key={`${edit.section}-${i}`}
-                    className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
-                  >
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-900">
-                        Edit #{i + 1}
-                      </span>
-                    </div>
-                    <div className="mb-3 rounded-lg border-2 border-blue-200 bg-blue-50 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">
-                        Resume section
-                      </p>
-                      <p className="mt-1 text-base font-bold text-blue-950">
-                        {edit.section}
-                      </p>
-                      <p className="mt-1 text-sm text-blue-900">
-                        {edit.sectionHint ??
-                          `Find this bullet under "${edit.section}" in your uploaded resume.`}
-                      </p>
-                      {edit.matchedKeywords && edit.matchedKeywords.length > 0 && (
-                        <p className="mt-2 text-xs text-blue-800">
-                          Already in this bullet:{" "}
-                          <span className="font-medium">
-                            {edit.matchedKeywords.join(", ")}
-                          </span>
-                        </p>
-                      )}
-                      {edit.targetMissingKeywords &&
-                        edit.targetMissingKeywords.length > 0 && (
-                          <p className="mt-1 text-xs text-amber-900">
-                            Missing JD keywords we try to add:{" "}
-                            <span className="font-medium">
-                              {edit.targetMissingKeywords.join(", ")}
-                            </span>
-                          </p>
-                        )}
-                      {edit.addedKeywords && edit.addedKeywords.length > 0 && (
-                        <p className="mt-1 text-xs text-emerald-900">
-                          Added in rewrite:{" "}
-                          <span className="font-medium">
-                            {edit.addedKeywords.join(", ")}
-                          </span>
-                        </p>
-                      )}
-                    </div>
-                    <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-zinc-700">
-                      <p className="mb-1 text-xs font-semibold text-red-700">Your current bullet (from resume):</p>
-                      {edit.original}
-                    </div>
-                    <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-zinc-900">
-                      <p className="mb-1 text-xs font-semibold text-emerald-700">Rewrite it as:</p>
-                      {edit.suggested}
-                    </div>
-                    <p className="mt-2 text-xs text-zinc-500">
-                      <span className="font-medium">Why:</span> {edit.reason}
-                    </p>
-                  </li>
-                ))}
-              </ol>
+              <textarea
+                readOnly
+                value={result.tailoringReport}
+                rows={14}
+                className={`${fieldTextareaClass} mt-3 font-mono text-xs`}
+              />
             </section>
           )}
 

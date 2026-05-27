@@ -131,6 +131,34 @@ def _resume_can_support_keyword(kw: str, resume_blob: str) -> bool:
     return False
 
 
+def _keyword_match_type(keyword: str, text: str) -> str | None:
+    """
+    Returns one of:
+    - "exact": keyword literal present
+    - "related": mapped support-root present
+    - "stem": same word family (simple prefix stem)
+    - None: no match
+    """
+    kw = keyword.lower().strip()
+    low = text.lower()
+    if not kw:
+        return None
+    if kw in low:
+        return "exact"
+    for root in KEYWORD_SUPPORT_ROOTS.get(kw, ()):
+        if root in low:
+            return "related"
+    stem = kw[:5] if len(kw) >= 5 else kw
+    if not stem:
+        return None
+    tokens = set(re.findall(r"[a-z0-9+#.-]{3,}", low))
+    for tok in tokens:
+        tok_stem = tok[:5] if len(tok) >= 5 else tok
+        if tok.startswith(stem) or stem.startswith(tok_stem):
+            return "stem"
+    return None
+
+
 def _related_to_bullet(kw: str, bullet: str) -> bool:
     b = _tokens(bullet)
     k = _tokens(kw)
@@ -183,26 +211,16 @@ def compute_ats_breakdown(
 ) -> dict:
     blob = " ".join(claims).lower()
     used_blob = " ".join(used).lower()
-    blob_tokens = set(re.findall(r"[a-z0-9+#.-]{3,}", f"{blob} {used_blob}"))
+    match_blob = f"{blob} {used_blob}"
     matched: list[str] = []
     missing: list[str] = []
+    related: list[str] = []
     for kw in jd_keywords:
-        roots = KEYWORD_SUPPORT_ROOTS.get(kw, ())
-        supported_by_root = any(root in blob or root in used_blob for root in roots)
-        # Lightweight stem-family fallback: experiment ~= experimentation, model ~= models, etc.
-        stem = kw[:5] if len(kw) >= 5 else kw
-        supported_by_stem = any(
-            tok.startswith(stem) or stem.startswith(tok[:5] if len(tok) >= 5 else tok)
-            for tok in blob_tokens
-        )
-        if (
-            kw in blob
-            or kw in used_blob
-            or any(kw in u.lower() for u in used)
-            or supported_by_root
-            or supported_by_stem
-        ):
+        match_kind = _keyword_match_type(kw, match_blob)
+        if match_kind:
             matched.append(kw)
+            if match_kind in ("related", "stem"):
+                related.append(kw)
         else:
             missing.append(kw)
     total = len(jd_keywords) or 1
@@ -213,6 +231,7 @@ def compute_ats_breakdown(
         "matchedKeywords": matched,
         "missingKeywords": missing,
         "supportedCount": len(matched),
+        "relatedMatchedKeywords": related,
     }
 
 
@@ -386,8 +405,7 @@ def _extract_resume_bullets(
 
 
 def _jd_keywords_in_bullet(bullet: str, jd_keywords: list[str]) -> list[str]:
-    blob = bullet.lower()
-    return [kw for kw in jd_keywords if kw in blob]
+    return [kw for kw in jd_keywords if _keyword_match_type(kw, bullet)]
 
 
 def _guess_jd_title(jd_text: str) -> str | None:
@@ -420,17 +438,74 @@ def _word_tokens(text: str) -> list[str]:
     return re.findall(r"[A-Za-z0-9+#./%-]+", text)
 
 
+BULLET_MIN_WORDS = 17
+BULLET_MAX_WORDS = 19
+MAX_STARTER_REPEATS = 2
+
+ACTION_STARTERS = (
+    "Built",
+    "Developed",
+    "Engineered",
+    "Architected",
+    "Implemented",
+    "Designed",
+    "Created",
+    "Optimized",
+    "Delivered",
+    "Automated",
+    "Established",
+    "Improved",
+    "Refined",
+    "Trained",
+    "Deployed",
+    "Authored",
+    "Layered",
+    "Led",
+    "Drove",
+    "Streamlined",
+)
+
+
+def _first_starter(text: str) -> str:
+    toks = _word_tokens(text)
+    return toks[0] if toks else ""
+
+
+def _replace_first_word(text: str, new_first: str) -> str:
+    toks = _word_tokens(text)
+    if not toks:
+        return new_first
+    toks[0] = new_first
+    return " ".join(toks)
+
+
+def _jd_keywords_added(
+    original: str,
+    suggested: str,
+    candidates: list[str],
+) -> list[str]:
+    added: list[str] = []
+    for kw in candidates:
+        if kw in added:
+            continue
+        in_suggested = _keyword_match_type(kw, suggested) or kw.lower() in suggested.lower()
+        in_original = _keyword_match_type(kw, original) or kw.lower() in original.lower()
+        if in_suggested and not in_original:
+            added.append(kw)
+    return added
+
+
 def _enforce_bullet_word_window(
     suggested: str,
     *,
     original: str,
     keywords: list[str],
     missing_priority: list[str] | None = None,
-    min_words: int = 19,
-    max_words: int = 20,
+    min_words: int = BULLET_MIN_WORDS,
+    max_words: int = BULLET_MAX_WORDS,
 ) -> str:
     """
-    Force rewritten bullet to 19–20 words using only resume-safe wording.
+    Force rewritten bullet to 17–19 words using only resume-safe wording.
     - Removes obvious append style tails.
     - Keeps/uses words from original bullet as padding source.
     """
@@ -479,6 +554,70 @@ def _enforce_bullet_word_window(
 
     out = " ".join(words).strip()
     return out
+
+
+def _enforce_unique_starting_words(edits: list[dict]) -> list[dict]:
+    """Each bullet starter unique where possible; max 2 repeats across resume."""
+    counts: dict[str, int] = {}
+    for e in edits:
+        starter = _first_starter(e.get("suggested", "")).lower()
+        if starter:
+            counts[starter] = counts.get(starter, 0) + 1
+
+    for e in edits:
+        starter = _first_starter(e.get("suggested", "")).lower()
+        if not starter or counts.get(starter, 0) <= MAX_STARTER_REPEATS:
+            continue
+
+        for candidate in ACTION_STARTERS:
+            c_low = candidate.lower()
+            if counts.get(c_low, 0) >= MAX_STARTER_REPEATS:
+                continue
+            swapped = _replace_first_word(e["suggested"], candidate)
+            swapped = _enforce_bullet_word_window(
+                swapped,
+                original=e.get("original", ""),
+                keywords=e.get("weaveKeywords") or [],
+                missing_priority=e.get("targetMissingKeywords") or [],
+            )
+            counts[starter] -= 1
+            counts[c_low] = counts.get(c_low, 0) + 1
+            e["suggested"] = swapped
+            e["wordCount"] = len(_word_tokens(swapped))
+            break
+
+    return edits
+
+
+def _build_tailoring_report(edits: list[dict], jd_title: str | None) -> str:
+    lines: list[str] = []
+    if jd_title:
+        lines.append(f"Role: {jd_title}")
+        lines.append("")
+
+    by_section: dict[str, list[dict]] = {}
+    for e in edits:
+        by_section.setdefault(e["section"], []).append(e)
+
+    for section, items in by_section.items():
+        lines.append(f"### Section: {section}")
+        lines.append("")
+        for item in items:
+            n = item.get("bulletNumber", 1)
+            jd_added = item.get("jdKeywordsAdded") or []
+            lines.append(f"**Bullet Point {n}**")
+            lines.append(f"**Original:** {item.get('original', '')}")
+            lines.append(
+                f"**Rewritten (17–19 words):** {item.get('suggested', '')}"
+            )
+            lines.append(f"**JD Keywords Added:** {', '.join(jd_added) if jd_added else '—'}")
+            lines.append(f"**Word Count:** {item.get('wordCount', 0)}")
+            lines.append(
+                f"**Reason for Change:** {item.get('reasonForChange') or item.get('reason', '')}"
+            )
+            lines.append("")
+
+    return "\n".join(lines).strip()
 
 
 def _apply_edits_to_resume(raw_text: str, edits: list[dict]) -> str:
@@ -536,37 +675,58 @@ async def _build_edits_from_resume(
     ]
     rewrites = await rewrite_resume_bullets_llm(llm_payload)
 
+    section_counts: dict[str, int] = {}
     edits: list[dict] = []
     for i, (_, section, text, weave, missing_targets, hits) in enumerate(selected):
         rid = i + 1
-        suggested_raw = rewrites.get(rid) or _simple_rewrite(text, weave)
+        llm_row = rewrites.get(rid) or {}
+        suggested_raw = llm_row.get("suggested") if isinstance(llm_row, dict) else llm_row
+        if not isinstance(suggested_raw, str) or not suggested_raw:
+            suggested_raw = _simple_rewrite(text, weave)
+
         suggested = _enforce_bullet_word_window(
-            suggested_raw,
+            str(suggested_raw),
             original=text,
             keywords=weave,
             missing_priority=missing_targets,
         )
-        added_in_rewrite = [
-            kw for kw in weave if kw in suggested.lower() and kw not in text.lower()
-        ]
+        jd_added = llm_row.get("jdKeywordsAdded") if isinstance(llm_row, dict) else []
+        if not isinstance(jd_added, list) or not jd_added:
+            jd_added = _jd_keywords_added(text, suggested, weave)
+
+        reason = ""
+        if isinstance(llm_row, dict):
+            reason = str(llm_row.get("reasonForChange") or "").strip()
+        if not reason:
+            reason = (
+                f"Optimized this \"{section}\" bullet for JD alignment using supported "
+                f"keywords: {', '.join(jd_added[:6]) or 'role-relevant phrasing'}."
+            )
+
+        section_counts[section] = section_counts.get(section, 0) + 1
+        bullet_number = section_counts[section]
+        word_count = len(_word_tokens(suggested))
+
         edits.append(
             {
                 "section": section,
+                "bulletNumber": bullet_number,
                 "sectionHint": (
                     f"In your resume file, open the \"{section}\" section and replace this bullet."
                 ),
                 "original": text,
                 "suggested": suggested,
+                "jdKeywordsAdded": jd_added,
+                "wordCount": word_count,
+                "reasonForChange": reason,
+                "weaveKeywords": weave,
                 "matchedKeywords": hits[:8],
                 "targetMissingKeywords": missing_targets,
-                "addedKeywords": added_in_rewrite,
-                "reason": (
-                    f"Picked from \"{section}\". "
-                    f"Targets missing JD keywords: {', '.join(missing_targets[:6]) or '—'}. "
-                    "Full rewrite only (19–20 words), no invented experience."
-                ),
+                "reason": reason,
             }
         )
+
+    edits = _enforce_unique_starting_words(edits)
     return edits
 
 
@@ -604,9 +764,12 @@ async def run_jd_tailor(resume_id: str, jd_text: str) -> dict:
     skipped = [kw for kw in jd_keywords if kw not in keywords_used]
     ats = compute_ats_breakdown(jd_keywords, claims, keywords_used)
 
+    jd_title = _guess_jd_title(jd_text)
+    tailoring_report = _build_tailoring_report(suggested_edits, jd_title)
+
     warnings = [
-        "Rewrites try to add missing JD keywords only when your resume already supports them (same domain/skills elsewhere).",
-        "We do not invent employers, tools, or metrics. Copy each green rewrite into the section shown.",
+        "Each rewrite is 17–19 words, fact-accurate, and shown with section + original + rewritten + JD keywords added.",
+        "ATS matching includes exact and related terms from your resume — we do not invent tools or experience.",
     ]
     if not suggested_edits:
         warnings.append(
@@ -629,8 +792,9 @@ async def run_jd_tailor(resume_id: str, jd_text: str) -> dict:
     result = {
         "runId": run_id,
         "resumeId": resume_id,
-        "jdTitle": _guess_jd_title(jd_text),
+        "jdTitle": jd_title,
         "tailoredText": text,
+        "tailoringReport": tailoring_report,
         "suggestedEdits": suggested_edits,
         "keywordsUsed": keywords_used,
         "keywordsSkipped": skipped,

@@ -181,7 +181,17 @@ async def tailor_resume_llm(payload: dict[str, Any]) -> dict[str, Any]:
     return await llm_json_completion(RESUME_TAILOR_SYSTEM, payload)
 
 
-REWRITE_BULLETS_SYSTEM = """You rewrite resume bullets to highlight job-description keywords.
+REWRITE_BULLETS_SYSTEM = """You tailor resume bullets to a Job Description (JD).
+
+Rules (strict):
+1) Use JD keywords and strong action verbs naturally (no keyword stuffing).
+2) No false information — only rephrase facts in original (employers, dates, tools, metrics stay true).
+3) suggested must be a FULL rewrite (never append tails like "— emphasizing ...").
+4) suggested must be exactly 17, 18, or 19 words.
+5) First word of each suggested bullet should be a strong action verb.
+6) Across the batch, avoid repeating the same first word more than twice.
+7) Prioritize missingKeywordsPriority when supported by original facts.
+8) Do not copy JD requirement language ("required", "preferred", "a plus").
 
 Input JSON:
 {
@@ -190,8 +200,8 @@ Input JSON:
       "id": 1,
       "section": "Work Experience",
       "original": "exact resume bullet",
-      "keywordsToWeave": ["sql", "analytics", "experimentation"],
-      "missingKeywordsPriority": ["experimentation", "lifecycle"],
+      "keywordsToWeave": ["sql", "analytics"],
+      "missingKeywordsPriority": ["experimentation"],
       "alreadyInBullet": ["sql"]
     }
   ]
@@ -200,27 +210,24 @@ Input JSON:
 Return JSON only:
 {
   "rewrites": [
-    {"id": 1, "suggested": "one rewritten resume bullet"}
+    {
+      "id": 1,
+      "suggested": "rewritten bullet",
+      "jdKeywordsAdded": ["analytics", "experimentation"],
+      "reasonForChange": "why this rewrite improves JD alignment"
+    }
   ]
-}
-
-Rules:
-- original is sacred fact source — keep employers, titles, dates, tools, metrics.
-- Do NOT copy posting language (no "required", "preferred", "a plus", "candidates must").
-- Only weave keywords from keywordsToWeave when they fit facts already in original.
-- Prioritize missingKeywordsPriority first (these improve ATS match).
-- Do not add keywords that are not supported by original facts.
-- suggested must be a FULL rewrite of original (not append text like "— emphasizing ...").
-- suggested must be exactly 19 or 20 words.
-- suggested must stay one bullet/sentence in resume tone."""
+}"""
 
 
-async def rewrite_resume_bullets_llm(bullets: list[dict[str, Any]]) -> dict[int, str]:
+async def rewrite_resume_bullets_llm(
+    bullets: list[dict[str, Any]],
+) -> dict[int, dict[str, Any]]:
     """Rewrite pre-selected resume bullets; originals are never taken from LLM."""
     if not bullets:
         return {}
     data = await llm_json_completion(REWRITE_BULLETS_SYSTEM, {"bullets": bullets})
-    out: dict[int, str] = {}
+    out: dict[int, dict[str, Any]] = {}
     for row in data.get("rewrites") or []:
         if not isinstance(row, dict):
             continue
@@ -229,7 +236,15 @@ async def rewrite_resume_bullets_llm(bullets: list[dict[str, Any]]) -> dict[int,
         if rid is None or not suggested:
             continue
         try:
-            out[int(rid)] = suggested
+            rid_int = int(rid)
         except (TypeError, ValueError):
             continue
+        jd_added = row.get("jdKeywordsAdded") or []
+        if not isinstance(jd_added, list):
+            jd_added = []
+        out[rid_int] = {
+            "suggested": suggested,
+            "jdKeywordsAdded": [str(k).strip() for k in jd_added if str(k).strip()],
+            "reasonForChange": str(row.get("reasonForChange") or "").strip(),
+        }
     return out

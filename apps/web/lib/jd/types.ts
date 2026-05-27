@@ -1,9 +1,14 @@
 export type SuggestedEdit = {
   section: string;
+  bulletNumber?: number;
   /** Plain-language pointer for where to edit in the user's Word/PDF resume */
   sectionHint?: string;
   original: string;
   suggested: string;
+  jdKeywordsAdded?: string[];
+  wordCount?: number;
+  reasonForChange?: string;
+  /** Backward-compatible alias */
   reason: string;
   matchedKeywords?: string[];
   targetMissingKeywords?: string[];
@@ -16,6 +21,7 @@ export type AtsBreakdown = {
   matchedKeywords: string[];
   missingKeywords: string[];
   supportedCount: number;
+  relatedMatchedKeywords?: string[];
 };
 
 export type JDTailorResult = {
@@ -23,6 +29,7 @@ export type JDTailorResult = {
   resumeId: string;
   jdTitle: string | null;
   tailoredText: string;
+  tailoringReport?: string;
   suggestedEdits?: SuggestedEdit[];
   keywordsUsed: string[];
   keywordsSkipped: string[];
