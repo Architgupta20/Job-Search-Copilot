@@ -1,8 +1,11 @@
 export type SuggestedEdit = {
   section: string;
+  /** Plain-language pointer for where to edit in the user's Word/PDF resume */
+  sectionHint?: string;
   original: string;
   suggested: string;
   reason: string;
+  matchedKeywords?: string[];
 };
 
 export type AtsBreakdown = {

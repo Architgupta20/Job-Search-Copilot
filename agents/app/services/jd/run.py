@@ -6,6 +6,8 @@ from io import BytesIO
 from docx import Document
 
 from app.config import JD_RUNS_DIR
+
+_EMAIL_IN_LINE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 from app.services.llm.client import rewrite_resume_bullets_llm
 from app.services.resume.parser import load_resume
 
@@ -18,13 +20,36 @@ CANONICAL_SECTIONS = {
     "experience": "Work Experience",
     "professional experience": "Work Experience",
     "employment": "Work Experience",
+    "employment history": "Work Experience",
+    "relevant experience": "Work Experience",
+    "internship": "Work Experience",
+    "internships": "Work Experience",
     "education": "Education",
+    "academic background": "Education",
     "projects": "Projects",
+    "personal projects": "Projects",
     "skills": "Skills",
+    "technical skills": "Skills",
+    "core competencies": "Skills",
     "summary": "Summary",
+    "professional summary": "Summary",
+    "objective": "Summary",
+    "profile": "Summary",
     "certifications": "Certifications",
     "achievements": "Achievements",
+    "awards": "Achievements",
 }
+
+# Map regex on header text → display section name
+_SECTION_HEADER_RULES: list[tuple[str, str]] = [
+    (r"work|professional|employment|internship|career", "Work Experience"),
+    (r"education|academic|university|degree", "Education"),
+    (r"project", "Projects"),
+    (r"skill|competenc|technolog|tools|expertise", "Skills"),
+    (r"summary|objective|profile|about me", "Summary"),
+    (r"certif", "Certifications"),
+    (r"achieve|award|honor", "Achievements"),
+]
 
 
 def normalize_line_breaks(text: str) -> str:
@@ -82,27 +107,57 @@ def _tokens(s: str) -> set[str]:
     return set(re.findall(r"[a-z0-9+#.-]{3,}", (s or "").lower()))
 
 
-def _canonical_section_name(section: str | None) -> str:
-    key = _norm(section or "").lower().rstrip(":")
+def _header_to_section_name(header: str) -> str:
+    key = _norm(header).lower().rstrip(":")
     if key in CANONICAL_SECTIONS:
         return CANONICAL_SECTIONS[key]
-    return _norm(section or "") or "General"
+    for pattern, name in _SECTION_HEADER_RULES:
+        if re.search(pattern, key):
+            return name
+    cleaned = _norm(header).rstrip(":")
+    if cleaned and len(cleaned) <= 80:
+        if cleaned.isupper():
+            return cleaned.title()
+        return cleaned
+    return "Other"
+
+
+def _is_section_header(line: str) -> bool:
+    t = _norm(line)
+    if not t or len(t) > 90:
+        return False
+    low = t.lower().rstrip(":")
+    if low in CANONICAL_SECTIONS:
+        return True
+    for pattern, _ in _SECTION_HEADER_RULES:
+        if re.search(pattern, low):
+            return True
+    # Typical resume headings: short ALL CAPS line
+    alpha = re.sub(r"[^A-Za-z]", "", t)
+    words = t.split()
+    if (
+        len(words) <= 8
+        and len(alpha) >= 3
+        and alpha.isupper()
+        and not _EMAIL_IN_LINE.search(t)
+    ):
+        return True
+    return False
 
 
 def _extract_resume_sections(raw_text: str) -> list[tuple[str, list[str]]]:
     sections: list[tuple[str, list[str]]] = []
-    current_name = "General"
+    current_name = "Header / Contact"
     current_lines: list[str] = []
 
     for raw in raw_text.splitlines():
         line = _norm(raw)
         if not line:
             continue
-        low = line.lower().rstrip(":")
-        if low in CANONICAL_SECTIONS:
+        if _is_section_header(line):
             if current_lines:
                 sections.append((current_name, current_lines))
-            current_name = CANONICAL_SECTIONS[low]
+            current_name = _header_to_section_name(line)
             current_lines = []
             continue
         current_lines.append(line)
@@ -295,10 +350,14 @@ async def _build_edits_from_resume(
         edits.append(
             {
                 "section": section,
+                "sectionHint": (
+                    f"In your resume file, open the \"{section}\" section and replace this bullet."
+                ),
                 "original": text,
                 "suggested": _norm(suggested),
+                "matchedKeywords": hits[:8],
                 "reason": (
-                    f"Resume bullet matched JD keywords: {', '.join(hits[:6])}. "
+                    f"Picked from \"{section}\" — matched JD keywords: {', '.join(hits[:6])}. "
                     "Rewrite keeps your facts; only wording is adjusted."
                 ),
             }
