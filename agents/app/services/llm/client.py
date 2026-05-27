@@ -179,3 +179,46 @@ async def llm_json_completion(system: str, user_payload: dict[str, Any]) -> dict
 
 async def tailor_resume_llm(payload: dict[str, Any]) -> dict[str, Any]:
     return await llm_json_completion(RESUME_TAILOR_SYSTEM, payload)
+
+
+REWRITE_BULLETS_SYSTEM = """You rewrite resume bullets to highlight job-description keywords.
+
+Input JSON:
+{
+  "bullets": [
+    {"id": 1, "section": "Work Experience", "original": "exact resume bullet", "keywordsToWeave": ["sql", "analytics"]}
+  ]
+}
+
+Return JSON only:
+{
+  "rewrites": [
+    {"id": 1, "suggested": "one rewritten resume bullet"}
+  ]
+}
+
+Rules:
+- original is sacred fact source — keep employers, titles, dates, tools, metrics.
+- Do NOT copy posting language (no "required", "preferred", "a plus", "candidates must").
+- Only weave keywords from keywordsToWeave when they fit facts already in original.
+- suggested must stay one bullet/sentence in resume tone."""
+
+
+async def rewrite_resume_bullets_llm(bullets: list[dict[str, Any]]) -> dict[int, str]:
+    """Rewrite pre-selected resume bullets; originals are never taken from LLM."""
+    if not bullets:
+        return {}
+    data = await llm_json_completion(REWRITE_BULLETS_SYSTEM, {"bullets": bullets})
+    out: dict[int, str] = {}
+    for row in data.get("rewrites") or []:
+        if not isinstance(row, dict):
+            continue
+        rid = row.get("id")
+        suggested = str(row.get("suggested") or "").strip()
+        if rid is None or not suggested:
+            continue
+        try:
+            out[int(rid)] = suggested
+        except (TypeError, ValueError):
+            continue
+    return out
