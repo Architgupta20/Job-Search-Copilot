@@ -10,6 +10,14 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import RUNS_DIR
+from app.light_mode import (
+    is_light_mode,
+    people_per_role,
+    serp_page_starts,
+    serp_query_limit,
+    skip_careers_scrape,
+    skip_company_host_probe,
+)
 from app.services.company.job_ats import enrich_jobs_with_ats
 from app.services.company.job_detail import fetch_job_posting_text
 from app.services.company.jobs import discover_careers_portal, fetch_jobs_deep, fetch_html
@@ -21,7 +29,6 @@ from app.services.company.locations import (
     serpapi_location,
 )
 from app.services.company.roles import (
-    PEOPLE_PER_ROLE,
     ROLE_LINKEDIN_TITLES,
     ROLE_SENIOR_QUERY,
     seniority_score,
@@ -39,6 +46,11 @@ def _slugify(name: str) -> str:
 
 async def resolve_company(name: str) -> dict:
     trimmed = name.strip()
+    if skip_company_host_probe():
+        slug = _slugify(trimmed)
+        domain = f"{slug}.com" if slug else None
+        return {"name": trimmed, "domain": domain, "careersUrl": None}
+
     words = re.sub(r"[^a-z0-9\s]", "", trimmed.lower()).split()
     slugs = {_slugify(trimmed), words[0] if words else "", "".join(words[:2])}
     hosts = []
@@ -208,11 +220,17 @@ async def discover_people_for_roles(
     serp_loc = serpapi_location(location_country, location_city)
     loc_display = location_label(location_country, location_city)
 
+    per_role = people_per_role()
     if not key:
         warnings.append(
-            f"Add SERPAPI_API_KEY for LinkedIn search ({PEOPLE_PER_ROLE} senior people per role)."
+            f"Add SERPAPI_API_KEY for LinkedIn search ({per_role} senior people per role)."
         )
     else:
+        if is_light_mode():
+            warnings.append(
+                "Lite mode (JOB_COPILOT_LIGHT): max 3 people/role, 1 SerpAPI query/role. "
+                "Use Outreach drafts for manual contacts."
+            )
         async with httpx.AsyncClient(timeout=35.0) as client:
             for role in target_roles:
                 titles = ROLE_LINKEDIN_TITLES.get(role, role)
@@ -229,13 +247,13 @@ async def discover_people_for_roles(
                         f'site:linkedin.com/in "{company_name}" {title_clause}{loc_suffix} '
                         '-intitle:"jobs" -intitle:"job"'
                     ),
-                ]
+                ][: serp_query_limit()]
 
                 candidates: list[dict] = []
                 candidate_links: set[str] = set()
 
                 for q in queries:
-                    for start in (0, 10):
+                    for start in serp_page_starts():
                         params: dict = {
                             "engine": "google",
                             "q": q,
@@ -275,9 +293,9 @@ async def discover_people_for_roles(
                             candidate_links.add(link)
                             candidates.append(person)
 
-                        if len(candidates) >= PEOPLE_PER_ROLE + 8:
+                        if len(candidates) >= per_role + 8:
                             break
-                    if len(candidates) >= PEOPLE_PER_ROLE + 8:
+                    if len(candidates) >= per_role + 8:
                         break
 
                 candidates.sort(
@@ -293,7 +311,7 @@ async def discover_people_for_roles(
                     people.append(person)
                     people_by_role[role].append(person)
                     role_count += 1
-                    if role_count >= PEOPLE_PER_ROLE:
+                    if role_count >= per_role:
                         break
 
                 if role_count == 0:
@@ -305,12 +323,12 @@ async def discover_people_for_roles(
                         f"{company_name}{loc_hint}. "
                         "Try another city, broader country only, or a different role."
                     )
-                elif role_count < PEOPLE_PER_ROLE:
+                elif role_count < per_role:
                     warnings.append(
-                        f"Found {role_count}/{PEOPLE_PER_ROLE} matching senior profiles for {role}."
+                        f"Found {role_count}/{per_role} matching senior profiles for {role}."
                     )
 
-    total_expected = PEOPLE_PER_ROLE * len(target_roles)
+    total_expected = per_role * len(target_roles)
     loc_note = (
         f" Location filter: {loc_display}."
         if loc_display
@@ -322,7 +340,7 @@ async def discover_people_for_roles(
         "ranked senior-first for your role or equivalents."
         + loc_note,
     )
-    if people:
+    if people and not is_light_mode():
         warnings.append(
             "Researching email/phone via Hunter.io + Google + company pages (30–90s)…"
         )
@@ -332,9 +350,13 @@ async def discover_people_for_roles(
             mr = p.get("matchedRole")
             if mr in people_by_role:
                 people_by_role[mr].append(p)
+    elif people and is_light_mode():
+        warnings.append(
+            "Lite mode: skipped bulk email lookup. Use Find email (Hunter) on each contact in Outreach drafts."
+        )
 
     warnings.append(
-        f"LinkedIn: up to {PEOPLE_PER_ROLE} people per selected role "
+        f"LinkedIn: up to {per_role} people per selected role "
         f"({len(target_roles)} roles → target {total_expected} total). "
         "Add HUNTER_API_KEY in apps/web/.env for best email discovery."
     )
@@ -358,7 +380,7 @@ async def run_company_search(
     if careers_url_override:
         careers_url = careers_url_override.rstrip("/")
         company["careersUrl"] = careers_url
-    elif company.get("domain") or company_name:
+    elif not skip_careers_scrape() and (company.get("domain") or company_name):
         found, extra = await discover_careers_portal(
             company["name"], company.get("domain")
         )
@@ -369,7 +391,12 @@ async def run_company_search(
 
     jobs: list[dict] = []
     jobs_by_role: dict[str, list[dict]] = {r: [] for r in target_roles}
-    if careers_url:
+    if skip_careers_scrape():
+        warnings.append(
+            "Lite mode: careers job scrape skipped (saves CPU). Use Outreach drafts + JD tailor, "
+            "or run without JOB_COPILOT_LIGHT for full company search."
+        )
+    elif careers_url:
         jobs, jobs_by_role, jw = await fetch_jobs_deep(
             careers_url, extra_pages, target_roles, company["name"], company.get("domain")
         )
@@ -415,7 +442,7 @@ async def run_company_search(
         "peopleByRole": people_by_role,
         "jobs": jobs,
         "jobsByRole": jobs_by_role,
-        "peoplePerRole": PEOPLE_PER_ROLE,
+        "peoplePerRole": people_per_role(),
         "resumeAttached": resume_attached,
         "warnings": list(dict.fromkeys(warnings)),
     }

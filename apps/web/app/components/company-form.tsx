@@ -39,13 +39,10 @@ export function CompanyForm() {
     fetch("/api/config")
       .then((res) => res.json())
       .then((data: ServiceConfig) => {
-        const available = data.serpapi?.available ?? false;
-        setSerpapiAvailable(available);
-        setMode(available ? "search" : "manual");
+        setSerpapiAvailable(data.serpapi?.available ?? false);
       })
       .catch(() => {
         setSerpapiAvailable(false);
-        setMode("manual");
       });
   }, []);
 

@@ -100,9 +100,18 @@ cd ../apps/web
 npm install
 ```
 
-### 4. Run (one command)
+### 4. Run
 
-From repo root:
+**Laptop slow or hanging?** Use lite mode (recommended on 8 GB Macs):
+
+```bash
+conda activate job-copilot
+npm run dev:lite
+```
+
+This sets `JOB_COPILOT_LIGHT=1`: no Python file-watcher, webpack instead of Turbopack, skips careers scrape and bulk email research, max 3 people per role and 1 SerpAPI call per role. Use **Outreach drafts** for daily work.
+
+Full dev (heavier):
 
 ```bash
 conda activate job-copilot
