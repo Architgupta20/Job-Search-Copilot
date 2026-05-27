@@ -8,24 +8,25 @@ import httpx
 import app.env  # noqa: F401 — load apps/web/.env
 from app.env import get_groq_key, get_openai_key, get_llm_provider
 
-RESUME_TAILOR_SYSTEM = """You tailor resumes to job descriptions WITHOUT lying.
-The user will EDIT their own Word/DOCX file manually using your suggestions in the UI.
+RESUME_TAILOR_SYSTEM = """You are a resume editor. Your job is to rewrite the candidate's existing resume bullets and lines so they better match the job description — using ONLY facts already present in the resume.
 
-Rules:
-- ONLY use facts from allowedClaims and originalResume. Never add employers, degrees, tools, certifications, dates, or metrics not present.
-- Rephrase bullets and weave JD keywords ONLY when supported by existing facts.
-- Unsupported JD terms go in keywordsSkipped — never invent experience.
+CRITICAL RULES:
+1. tailoredText MUST be the FULL RESUME rewritten — copy every section and bullet from originalResume, and rephrase only the bullets where JD keywords fit naturally. Do NOT copy text from the job description. Do NOT output JD requirements or generic competency lists.
+2. For suggestedEdits: take a real bullet or sentence from originalResume, and show a rewritten version that weaves in matched JD keywords. The "original" field must be an exact or near-exact quote from originalResume.
+3. Never add skills, tools, employers, degrees, dates, or metrics that are not already in originalResume.
+4. Unsupported JD terms go in keywordsSkipped — never invent experience.
+5. section must be one of: Work Experience, Education, Projects, Skills, Summary, Certifications, Achievements, General.
 
-Return JSON only:
+Return JSON only — no markdown, no explanation:
 {
   "jdTitle": string | null,
-  "tailoredText": string (reference draft for copy/paste — section headers, one bullet per line with "- "),
+  "tailoredText": string (the FULL RESUME with your rewrites — same structure as originalResume, section headers uppercase, bullets starting with "- "),
   "suggestedEdits": [
     {
-      "section": string,
-      "original": string (short excerpt from resume),
-      "suggested": string (rewritten bullet or sentence),
-      "reason": string (which JD keywords this supports)
+      "section": "Work Experience" | "Education" | "Projects" | "Skills" | "Summary" | "Certifications" | "Achievements" | "General",
+      "original": string (copy the exact bullet or sentence from originalResume you are changing),
+      "suggested": string (your rewritten version that adds matched JD keywords),
+      "reason": string (which JD keywords this targets and why it fits)
     }
   ],
   "keywordsUsed": string[],
@@ -33,7 +34,7 @@ Return JSON only:
   "changeSummary": string[]
 }
 
-Provide at least 5 suggestedEdits when possible. tailoredText is a readable draft, NOT a file merge."""
+Provide at least 5 suggestedEdits. Each edit must target a DIFFERENT bullet from the resume."""
 
 
 def _extract_json(text: str) -> str:

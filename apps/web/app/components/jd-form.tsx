@@ -116,6 +116,14 @@ export function JDForm() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const warnings = Array.isArray(result?.warnings) ? result.warnings : [];
+  const suggestedEdits = Array.isArray(result?.suggestedEdits)
+    ? result.suggestedEdits
+    : [];
+  const changeSummary = Array.isArray(result?.changeSummary)
+    ? result.changeSummary
+    : [];
+
   return (
     <>
       <div>
@@ -176,7 +184,7 @@ export function JDForm() {
 
       {result && (
         <div className="space-y-6">
-          {result.warnings.map((w) => (
+          {warnings.map((w) => (
             <p
               key={w}
               className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
@@ -193,40 +201,48 @@ export function JDForm() {
             </p>
           )}
 
-          {result.suggestedEdits?.length > 0 && (
+          {suggestedEdits.length > 0 && (
             <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-zinc-900">
-                Suggested edits ({result.suggestedEdits.length})
+                Resume edits — {suggestedEdits.length} bullets to update
               </h2>
               <p className="mt-1 text-sm text-zinc-500">
-                Apply these in your DOCX manually — section by section.
+                Each card shows the original bullet from your resume and the rewritten version. Copy the <span className="font-medium text-emerald-800">New</span> version into your Word file.
               </p>
-              <ul className="mt-4 space-y-4">
-                {result.suggestedEdits.map((edit, i) => (
+              <ol className="mt-4 space-y-5">
+                {suggestedEdits.map((edit, i) => (
                   <li
                     key={`${edit.section}-${i}`}
-                    className="rounded-lg border border-zinc-100 bg-zinc-50 p-4"
+                    className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
                   >
-                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
-                      {edit.section}
-                    </p>
-                    <p className="mt-2 text-sm text-zinc-500">
-                      <span className="font-medium">Was:</span> {edit.original}
-                    </p>
-                    <p className="mt-2 text-sm text-zinc-900">
-                      <span className="font-medium text-emerald-800">Try:</span>{" "}
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-900">
+                        #{i + 1}
+                      </span>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Section: {edit.section}
+                      </span>
+                    </div>
+                    <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-zinc-700">
+                      <p className="mb-1 text-xs font-semibold text-red-700">Your current bullet (from resume):</p>
+                      {edit.original}
+                    </div>
+                    <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-zinc-900">
+                      <p className="mb-1 text-xs font-semibold text-emerald-700">Rewrite it as:</p>
                       {edit.suggested}
+                    </div>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      <span className="font-medium">Why:</span> {edit.reason}
                     </p>
-                    <p className="mt-1 text-xs text-zinc-500">{edit.reason}</p>
                   </li>
                 ))}
-              </ul>
+              </ol>
             </section>
           )}
 
-          {result.changeSummary.length > 0 && (
+          {changeSummary.length > 0 && (
             <ul className="list-inside list-disc text-sm text-zinc-700">
-              {result.changeSummary.map((c) => (
+              {changeSummary.map((c) => (
                 <li key={c}>{c}</li>
               ))}
             </ul>
