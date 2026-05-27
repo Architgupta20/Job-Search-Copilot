@@ -41,10 +41,17 @@ export function PersonCard({
   const [emailOpen, setEmailOpen] = useState(false);
   const [linkedInOpen, setLinkedInOpen] = useState(false);
   const [trackerMsg, setTrackerMsg] = useState<string | null>(null);
+  const [findingEmail, setFindingEmail] = useState(false);
+  const [foundEmail, setFoundEmail] = useState<{
+    email: string | null;
+    confidence: string;
+    source: string | null;
+    error?: string;
+  } | null>(null);
   const isLoading = loadingWhich !== null;
 
   const research = person.contactResearch;
-  const hasEmail = Boolean(person.email);
+  const hasEmail = Boolean(person.email) || Boolean(foundEmail?.email);
 
   async function loadDraft(which: "email" | "linkedin") {
     if (draft) return draft;
@@ -105,6 +112,34 @@ export function PersonCard({
     if (d) setLinkedInOpen(true);
   }
 
+  async function findEmail() {
+    if (!companyDomain) return;
+    setFindingEmail(true);
+    setFoundEmail(null);
+    try {
+      const res = await fetch("/api/run/company/find-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personName: person.name,
+          companyDomain,
+          companyName,
+        }),
+      });
+      const data = await res.json();
+      setFoundEmail({
+        email: data.email ?? null,
+        confidence: data.confidence ?? "not_found",
+        source: data.source ?? null,
+        error: data.error ?? undefined,
+      });
+    } catch {
+      setFoundEmail({ email: null, confidence: "not_found", source: null, error: "Request failed." });
+    } finally {
+      setFindingEmail(false);
+    }
+  }
+
   function saveToTracker() {
     const { duplicate } = addApplicationFromContact({
       company: companyName,
@@ -136,14 +171,46 @@ export function PersonCard({
         </p>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-800">
           <span>
-            Email: {person.email ?? "Not found"}{" "}
-            <ConfidenceBadge value={person.emailConfidence} />
+            Email:{" "}
+            {foundEmail?.email ?? person.email ?? "Not found"}{" "}
+            <ConfidenceBadge
+              value={
+                foundEmail?.email
+                  ? foundEmail.confidence
+                  : person.emailConfidence
+              }
+            />
+            {foundEmail?.source && (
+              <span className="ml-1 text-xs text-zinc-500">
+                via {foundEmail.source}
+              </span>
+            )}
           </span>
           <span>
             Phone: {person.phone ?? "Not found"}{" "}
             <ConfidenceBadge value={person.phoneConfidence} />
           </span>
         </div>
+        {!person.email && !foundEmail?.email && companyDomain && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={findingEmail}
+              onClick={findEmail}
+              className="rounded-lg border border-violet-300 bg-white px-2.5 py-1 text-xs font-semibold text-violet-900 hover:bg-violet-50 disabled:opacity-50"
+            >
+              {findingEmail ? "Searching Hunter…" : "Find email (Hunter)"}
+            </button>
+            {foundEmail?.error && (
+              <p className="text-xs text-amber-800">{foundEmail.error}</p>
+            )}
+          </div>
+        )}
+        {!companyDomain && !person.email && (
+          <p className="mt-2 text-xs text-zinc-500">
+            Enter company domain above to enable Hunter email lookup.
+          </p>
+        )}
         {research && research.sourcesChecked.length > 0 && (
           <p className="mt-2 text-xs text-zinc-600">
             Checked: {research.sourcesChecked.join(" · ")}

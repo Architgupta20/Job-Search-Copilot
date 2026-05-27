@@ -59,6 +59,7 @@ export type JobResult = {
 export type CompanyRunResult = {
   runId: string;
   company: CompanyInfo;
+  searchLocation?: string | null;
   people: PersonResult[];
   peopleByRole?: Record<string, PersonResult[]>;
   jobs: JobResult[];

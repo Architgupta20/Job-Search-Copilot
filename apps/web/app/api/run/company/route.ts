@@ -17,6 +17,8 @@ export async function POST(request: Request) {
   const companyName = body.companyName as string | undefined;
   const targetRoles = body.targetRoles as string[] | undefined;
   const careersUrlOverride = body.careersUrlOverride as string | undefined;
+  const locationCountry = body.locationCountry as string | undefined;
+  const locationCity = body.locationCity as string | undefined;
 
   if (!companyName?.trim()) {
     return NextResponse.json(
@@ -41,6 +43,8 @@ export async function POST(request: Request) {
     companyName: companyName.trim(),
     targetRoles,
     careersUrlOverride: careersUrlOverride?.trim() || null,
+    locationCountry: locationCountry?.trim() || null,
+    locationCity: locationCity?.trim() || null,
   });
   if (!proxied) {
     return NextResponse.json(

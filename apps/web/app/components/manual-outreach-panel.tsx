@@ -89,7 +89,8 @@ export function ManualOutreachPanel() {
     <div className="space-y-6">
       <p className="text-sm text-zinc-600">
         Add people you found on LinkedIn yourself. Each contact is{" "}
-        <strong>saved to Application tracker</strong> automatically. Draft{" "}
+        <strong>saved to Application tracker</strong> automatically. Use{" "}
+        <strong>Find email</strong> (needs Hunter.io key) or draft{" "}
         <strong>cold email</strong> and <strong>LinkedIn</strong> below. Upload a
         resume on home for richer copy.
       </p>

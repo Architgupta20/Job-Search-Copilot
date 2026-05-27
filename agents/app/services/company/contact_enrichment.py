@@ -343,6 +343,63 @@ async def enrich_person_contact(
     return person
 
 
+async def find_email_for_person(
+    person_name: str,
+    company_name: str,
+    domain: str,
+) -> dict:
+    """
+    Hunter-only email lookup for a single person (used by Outreach drafts / manual contacts).
+    Returns { email, confidence, source, hunterAvailable }.
+    """
+    d = _clean_domain(domain)
+    first, last = _name_parts(person_name)
+    hunter_key = get_hunter_key()
+
+    if not hunter_key:
+        return {
+            "email": None,
+            "confidence": "not_found",
+            "source": None,
+            "hunterAvailable": False,
+            "error": "Hunter.io key not set — add HUNTER_API_KEY to apps/web/.env",
+        }
+
+    if not d:
+        return {
+            "email": None,
+            "confidence": "not_found",
+            "source": None,
+            "hunterAvailable": True,
+            "error": "Company domain is required for Hunter lookup. Enter it in the company domain field.",
+        }
+
+    result: dict | None = None
+
+    if first:
+        result = await _hunter_email_finder(d, first, last, hunter_key)
+
+    if not result:
+        result = await _hunter_domain_search(d, person_name, hunter_key)
+
+    if result and result.get("email"):
+        return {
+            "email": result["email"],
+            "confidence": result.get("confidence", "likely"),
+            "source": result.get("source", "Hunter.io"),
+            "score": result.get("score"),
+            "hunterAvailable": True,
+        }
+
+    return {
+        "email": None,
+        "confidence": "not_found",
+        "source": "Hunter.io",
+        "hunterAvailable": True,
+        "error": f"No email found for {person_name} at {d} via Hunter.io",
+    }
+
+
 async def enrich_people_contacts(
     people: list[dict],
     company_name: str,

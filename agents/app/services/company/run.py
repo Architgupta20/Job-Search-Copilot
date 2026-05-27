@@ -14,6 +14,12 @@ from app.services.company.job_ats import enrich_jobs_with_ats
 from app.services.company.job_detail import fetch_job_posting_text
 from app.services.company.jobs import discover_careers_portal, fetch_jobs_deep, fetch_html
 from app.services.company.contact_enrichment import enrich_people_contacts
+from app.services.company.locations import (
+    location_label,
+    person_matches_location,
+    query_location_terms,
+    serpapi_location,
+)
 from app.services.company.roles import (
     PEOPLE_PER_ROLE,
     ROLE_LINKEDIN_TITLES,
@@ -190,12 +196,17 @@ async def discover_people_for_roles(
     company_name: str,
     domain: str | None,
     target_roles: list[str],
+    location_country: str | None = None,
+    location_city: str | None = None,
 ) -> tuple[list[dict], dict[str, list[dict]], list[str]]:
     warnings: list[str] = []
     people: list[dict] = []
     people_by_role: dict[str, list[dict]] = {r: [] for r in target_roles}
     seen_links: set[str] = set()
     key = (os.getenv("SERPAPI_API_KEY") or "").strip()
+    loc_terms = query_location_terms(location_country, location_city)
+    serp_loc = serpapi_location(location_country, location_city)
+    loc_display = location_label(location_country, location_city)
 
     if not key:
         warnings.append(
@@ -210,11 +221,12 @@ async def discover_people_for_roles(
                 if senior:
                     title_clause = f"({titles} OR {senior})"
 
+                loc_suffix = f" {loc_terms}" if loc_terms else ""
                 queries = [
-                    f"site:linkedin.com/in {company_name} {role}",
-                    f'site:linkedin.com/in "{company_name}" "{role}"',
+                    f"site:linkedin.com/in {company_name} {role}{loc_suffix}",
+                    f'site:linkedin.com/in "{company_name}" "{role}"{loc_suffix}',
                     (
-                        f'site:linkedin.com/in "{company_name}" {title_clause} '
+                        f'site:linkedin.com/in "{company_name}" {title_clause}{loc_suffix} '
                         '-intitle:"jobs" -intitle:"job"'
                     ),
                 ]
@@ -224,15 +236,18 @@ async def discover_people_for_roles(
 
                 for q in queries:
                     for start in (0, 10):
+                        params: dict = {
+                            "engine": "google",
+                            "q": q,
+                            "num": 10,
+                            "start": start,
+                            "api_key": key,
+                        }
+                        if serp_loc:
+                            params["location"] = serp_loc
                         res = await client.get(
                             "https://serpapi.com/search.json",
-                            params={
-                                "engine": "google",
-                                "q": q,
-                                "num": 10,
-                                "start": start,
-                                "api_key": key,
-                            },
+                            params=params,
                         )
                         if res.status_code != 200:
                             if start == 0:
@@ -246,6 +261,13 @@ async def discover_people_for_roles(
                         for item in batch:
                             person = _parse_person(item, company_name, role)
                             if not person:
+                                continue
+                            if not person_matches_location(
+                                snippet=item.get("snippet", ""),
+                                serp_title=item.get("title", ""),
+                                country=location_country,
+                                city=location_city,
+                            ):
                                 continue
                             link = person["linkedinUrl"]
                             if link in candidate_links:
@@ -275,9 +297,13 @@ async def discover_people_for_roles(
                         break
 
                 if role_count == 0:
+                    loc_hint = (
+                        f" in {loc_display}" if loc_display else ""
+                    )
                     warnings.append(
-                        f"No LinkedIn profiles matched {role} (or equivalent senior titles) at {company_name}. "
-                        "Try a careers URL override or a different role."
+                        f"No LinkedIn profiles matched {role} (or equivalent senior titles) at "
+                        f"{company_name}{loc_hint}. "
+                        "Try another city, broader country only, or a different role."
                     )
                 elif role_count < PEOPLE_PER_ROLE:
                     warnings.append(
@@ -285,10 +311,16 @@ async def discover_people_for_roles(
                     )
 
     total_expected = PEOPLE_PER_ROLE * len(target_roles)
+    loc_note = (
+        f" Location filter: {loc_display}."
+        if loc_display
+        else " Location: worldwide (no country/city filter)."
+    )
     warnings.insert(
         0,
         "People: current employees only (ex-employees filtered out), via Google-indexed LinkedIn — "
-        "ranked senior-first for your role or equivalents.",
+        "ranked senior-first for your role or equivalents."
+        + loc_note,
     )
     if people:
         warnings.append(
@@ -314,6 +346,8 @@ async def run_company_search(
     target_roles: list[str],
     resume_id: str | None = None,
     careers_url_override: str | None = None,
+    location_country: str | None = None,
+    location_city: str | None = None,
 ) -> dict:
     warnings: list[str] = []
     company = await resolve_company(company_name)
@@ -347,7 +381,11 @@ async def run_company_search(
         )
 
     people, people_by_role, pw = await discover_people_for_roles(
-        company["name"], company.get("domain"), target_roles
+        company["name"],
+        company.get("domain"),
+        target_roles,
+        location_country=location_country,
+        location_city=location_city,
     )
     warnings.extend(pw)
 
@@ -372,6 +410,7 @@ async def run_company_search(
     result = {
         "runId": run_id,
         "company": company,
+        "searchLocation": location_label(location_country, location_city),
         "people": people,
         "peopleByRole": people_by_role,
         "jobs": jobs,

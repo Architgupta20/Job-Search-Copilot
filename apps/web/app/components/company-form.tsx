@@ -9,12 +9,14 @@ import { ManualOutreachPanel } from "@/app/components/manual-outreach-panel";
 import { PersonCard } from "@/app/components/person-card";
 import { ServiceStatusBanner } from "@/app/components/service-status-banner";
 import { downloadCompanyResultsCsv } from "@/lib/company/export-csv";
+import { CITIES_BY_COUNTRY, COUNTRIES } from "@/lib/company/locations";
 import { PEOPLE_PER_ROLE, ROLE_GROUPS } from "@/lib/company/roles";
 import { getResumeSession, useResumeSession } from "@/lib/resume/session";
 import {
   checkboxClass,
   fieldInputClass,
   fieldLabelClass,
+  fieldSelectClass,
   roleOptionClass,
 } from "@/lib/ui/form-styles";
 
@@ -28,6 +30,10 @@ export function CompanyForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CompanyRunResult | null>(null);
+  const [locationCountry, setLocationCountry] = useState("");
+  const cityOptions = locationCountry
+    ? (CITIES_BY_COUNTRY[locationCountry] ?? [])
+    : [];
 
   useEffect(() => {
     fetch("/api/config")
@@ -60,6 +66,8 @@ export function CompanyForm() {
     const form = new FormData(e.currentTarget);
     const companyName = String(form.get("company") ?? "").trim();
     const roles = form.getAll("roles").map(String);
+    const country = String(form.get("locationCountry") ?? "").trim();
+    const city = String(form.get("locationCity") ?? "").trim();
 
     if (!companyName) {
       setError("Enter a company name.");
@@ -79,6 +87,8 @@ export function CompanyForm() {
           resumeId: session?.id ?? null,
           companyName,
           targetRoles: roles,
+          locationCountry: country || null,
+          locationCity: city || null,
         }),
       });
       const data = await res.json();
@@ -102,8 +112,9 @@ export function CompanyForm() {
       <div>
         <h1 className="text-2xl font-semibold text-zinc-900">Company</h1>
         <p className="mt-2 text-zinc-600">
-          Automated search finds LinkedIn people and careers jobs (SerpAPI). Manual
-          outreach lets you add contacts yourself and still draft email + LinkedIn.
+          Automated search finds LinkedIn people and careers jobs (needs SerpAPI).
+          Outreach drafts lets you add contacts yourself and draft email + LinkedIn
+          — no SerpAPI needed.
         </p>
       </div>
 
@@ -130,7 +141,7 @@ export function CompanyForm() {
           onClick={() => setMode("manual")}
           className={`rounded-lg border px-4 py-2 text-sm font-semibold ${tabClass(mode === "manual")}`}
         >
-          Manual outreach
+          Outreach drafts
         </button>
       </div>
 
@@ -143,7 +154,7 @@ export function CompanyForm() {
           <code className="rounded bg-amber-100 px-1">SERPAPI_API_KEY</code> to{" "}
           <code className="rounded bg-amber-100 px-1">apps/web/.env</code>, or set{" "}
           <code className="rounded bg-amber-100 px-1">SERPAPI_DISABLED=false</code>{" "}
-          when your quota resets. Use <strong>Manual outreach</strong> in the
+          when your quota resets.           Use <strong>Outreach drafts</strong> in the
           meantime.
         </p>
       )}
@@ -175,6 +186,68 @@ export function CompanyForm() {
             placeholder="e.g. Stripe, Anthropic, Databricks"
             className={fieldInputClass}
           />
+        </div>
+
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4">
+          <p className={fieldLabelClass}>People location (optional)</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Narrow LinkedIn search — e.g. company in India, people based in Delhi.
+            Leave country as &quot;Anywhere&quot; for no location filter.
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="locationCountry" className="text-xs font-medium text-zinc-900">
+                Country
+              </label>
+              <select
+                id="locationCountry"
+                name="locationCountry"
+                value={locationCountry}
+                onChange={(e) => setLocationCountry(e.target.value)}
+                className={fieldSelectClass}
+              >
+                {COUNTRIES.map((c) => (
+                  <option key={c || "any"} value={c}>
+                    {c || "Anywhere (worldwide)"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="locationCity" className="text-xs font-medium text-zinc-900">
+                City
+              </label>
+              {cityOptions.length > 0 ? (
+                <select
+                  key={locationCountry}
+                  id="locationCity"
+                  name="locationCity"
+                  defaultValue=""
+                  className={fieldSelectClass}
+                >
+                  <option value="">Any city in country</option>
+                  {cityOptions.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="locationCity"
+                  name="locationCity"
+                  type="text"
+                  disabled={!locationCountry}
+                  placeholder={
+                    locationCountry
+                      ? "Type city name"
+                      : "Select a country first"
+                  }
+                  className={fieldInputClass}
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         <fieldset ref={rolesRef}>
@@ -267,6 +340,11 @@ export function CompanyForm() {
             <p className="mt-2 text-sm text-zinc-600">
               Domain: {result.company.domain ?? "—"}
             </p>
+            {result.searchLocation && (
+              <p className="mt-1 text-sm text-emerald-800">
+                People search location: {result.searchLocation}
+              </p>
+            )}
             {result.company.careersUrl && (
               <a
                 href={result.company.careersUrl}

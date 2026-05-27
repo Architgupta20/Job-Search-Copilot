@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services.company.cold_email import draft_cold_email
+from app.services.company.contact_enrichment import find_email_for_person
 from app.services.company.run import run_company_search, tailor_resume_for_job
 from app.services.resume.parser import load_resume
 
@@ -13,6 +14,8 @@ class CompanyRunBody(BaseModel):
     companyName: str
     targetRoles: list[str] = Field(min_length=1)
     careersUrlOverride: str | None = None
+    locationCountry: str | None = None
+    locationCity: str | None = None
 
 
 @router.post("/run")
@@ -27,11 +30,15 @@ async def company_run(body: CompanyRunBody):
 
     try:
         override = (body.careersUrlOverride or "").strip() or None
+        country = (body.locationCountry or "").strip() or None
+        city = (body.locationCity or "").strip() or None
         return await run_company_search(
             body.companyName.strip(),
             body.targetRoles,
             resume_id=body.resumeId,
             careers_url_override=override,
+            location_country=country,
+            location_city=city,
         )
     except Exception as e:
         raise HTTPException(500, str(e)) from e
@@ -71,6 +78,27 @@ class ColdEmailBody(BaseModel):
     matchedRole: str | None = None
     resumeId: str | None = None
     companyDomain: str | None = None
+
+
+class FindEmailBody(BaseModel):
+    personName: str
+    companyDomain: str
+    companyName: str | None = None
+
+
+@router.post("/find-email")
+async def find_email(body: FindEmailBody):
+    if not body.personName.strip() or not body.companyDomain.strip():
+        raise HTTPException(400, "personName and companyDomain are required.")
+    try:
+        result = await find_email_for_person(
+            person_name=body.personName.strip(),
+            company_name=(body.companyName or "").strip() or body.companyDomain.strip(),
+            domain=body.companyDomain.strip(),
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(500, str(e)) from e
 
 
 @router.post("/cold-email")
