@@ -36,7 +36,9 @@ function AtsScoreCard({ result }: { result: JDTailorResult }) {
       </div>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
-          <h3 className="text-sm font-medium text-emerald-900">Matched</h3>
+          <h3 className="text-sm font-medium text-emerald-900">
+            Matched (exact + related terms)
+          </h3>
           <p className="mt-1 text-sm text-zinc-700">
             {matched.length > 0 ? matched.join(", ") : "—"}
           </p>
@@ -233,9 +235,26 @@ export function JDForm() {
                       </p>
                       {edit.matchedKeywords && edit.matchedKeywords.length > 0 && (
                         <p className="mt-2 text-xs text-blue-800">
-                          JD keywords matched:{" "}
+                          Already in this bullet:{" "}
                           <span className="font-medium">
                             {edit.matchedKeywords.join(", ")}
+                          </span>
+                        </p>
+                      )}
+                      {edit.targetMissingKeywords &&
+                        edit.targetMissingKeywords.length > 0 && (
+                          <p className="mt-1 text-xs text-amber-900">
+                            Missing JD keywords we try to add:{" "}
+                            <span className="font-medium">
+                              {edit.targetMissingKeywords.join(", ")}
+                            </span>
+                          </p>
+                        )}
+                      {edit.addedKeywords && edit.addedKeywords.length > 0 && (
+                        <p className="mt-1 text-xs text-emerald-900">
+                          Added in rewrite:{" "}
+                          <span className="font-medium">
+                            {edit.addedKeywords.join(", ")}
                           </span>
                         </p>
                       )}
@@ -259,8 +278,8 @@ export function JDForm() {
 
           {changeSummary.length > 0 && (
             <ul className="list-inside list-disc text-sm text-zinc-700">
-              {changeSummary.map((c) => (
-                <li key={c}>{c}</li>
+              {changeSummary.map((c, i) => (
+                <li key={`${i}-${c}`}>{c}</li>
               ))}
             </ul>
           )}

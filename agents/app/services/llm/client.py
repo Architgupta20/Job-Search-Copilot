@@ -186,7 +186,14 @@ REWRITE_BULLETS_SYSTEM = """You rewrite resume bullets to highlight job-descript
 Input JSON:
 {
   "bullets": [
-    {"id": 1, "section": "Work Experience", "original": "exact resume bullet", "keywordsToWeave": ["sql", "analytics"]}
+    {
+      "id": 1,
+      "section": "Work Experience",
+      "original": "exact resume bullet",
+      "keywordsToWeave": ["sql", "analytics", "experimentation"],
+      "missingKeywordsPriority": ["experimentation", "lifecycle"],
+      "alreadyInBullet": ["sql"]
+    }
   ]
 }
 
@@ -201,6 +208,10 @@ Rules:
 - original is sacred fact source — keep employers, titles, dates, tools, metrics.
 - Do NOT copy posting language (no "required", "preferred", "a plus", "candidates must").
 - Only weave keywords from keywordsToWeave when they fit facts already in original.
+- Prioritize missingKeywordsPriority first (these improve ATS match).
+- Do not add keywords that are not supported by original facts.
+- suggested must be a FULL rewrite of original (not append text like "— emphasizing ...").
+- suggested must be exactly 19 or 20 words.
 - suggested must stay one bullet/sentence in resume tone."""
 
 

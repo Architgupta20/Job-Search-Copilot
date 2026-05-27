@@ -6,6 +6,8 @@ export type SuggestedEdit = {
   suggested: string;
   reason: string;
   matchedKeywords?: string[];
+  targetMissingKeywords?: string[];
+  addedKeywords?: string[];
 };
 
 export type AtsBreakdown = {
