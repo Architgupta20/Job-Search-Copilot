@@ -220,6 +220,48 @@ Return JSON only:
 }"""
 
 
+INTERVIEW_PREP_SYSTEM = """You prepare interview practice for a job candidate.
+
+Rules (strict):
+1) Generate exactly 5 interview questions for the role and company.
+2) Each question must map to ONE resumeAnchor copied verbatim from resumeAnchors in the input.
+3) STAR prompts must guide the candidate using ONLY facts in that anchor — no invented tools, employers, dates, or metrics.
+4) Mix categories: at least 1 role-fit, at least 2 behavioral, at least 1 technical.
+5) Questions should reflect jdKeywords when the anchor supports them; never assume skills not in the anchor.
+
+Input JSON:
+{
+  "companyName": "...",
+  "roleTitle": "...",
+  "jdKeywords": ["sql", "..."],
+  "resumeAnchors": [{"id": 1, "text": "exact resume bullet"}],
+  "skillsSummary": "comma-separated skills from resume"
+}
+
+Return JSON only:
+{
+  "questions": [
+    {
+      "id": 1,
+      "question": "interviewer question text",
+      "category": "behavioral|technical|role-fit",
+      "resumeAnchor": "exact text from resumeAnchors",
+      "starPrompt": {
+        "situation": "...",
+        "task": "...",
+        "action": "...",
+        "result": "...",
+        "tip": "..."
+      }
+    }
+  ]
+}"""
+
+
+async def interview_prep_llm(payload: dict[str, Any]) -> dict[str, Any]:
+    return await llm_json_completion(INTERVIEW_PREP_SYSTEM, payload)
+
+
 async def rewrite_resume_bullets_llm(
     bullets: list[dict[str, Any]],
 ) -> dict[int, dict[str, Any]]:

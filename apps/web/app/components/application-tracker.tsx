@@ -7,6 +7,7 @@ import {
   fetchColdOutreachDraft,
   type ColdOutreachDraft,
 } from "@/lib/outreach/draft";
+import { buildInterviewPrepUrl } from "@/lib/interview-prep/url";
 import { getResumeSession } from "@/lib/resume/session";
 import {
   APPLICATION_STATUSES,
@@ -79,6 +80,7 @@ function ApplicationRow({
   );
 
   const outreachUrl = buildCompanyOutreachUrl(entry);
+  const interviewPrepUrl = buildInterviewPrepUrl(entry);
 
   const sentAt = getOutreachSentAt(entry);
   const due = followUpSuggested(entry);
@@ -244,6 +246,12 @@ function ApplicationRow({
             className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50"
           >
             Open in Company →
+          </Link>
+          <Link
+            href={interviewPrepUrl}
+            className="rounded-lg border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-900 hover:bg-violet-100"
+          >
+            Interview prep
           </Link>
           {canFollowUp && (
             <button

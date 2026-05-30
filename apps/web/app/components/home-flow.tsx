@@ -197,6 +197,19 @@ export function HomeFlow() {
             </Link>
 
             <Link
+              href="/interview-prep"
+              className="group rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-zinc-400 hover:shadow-md"
+            >
+              <h3 className="font-semibold text-zinc-900 group-hover:text-emerald-800">
+                Interview prep
+              </h3>
+              <p className="mt-2 text-sm text-zinc-600">
+                Five questions with STAR prompts tied to your resume bullets for
+                a specific company and role.
+              </p>
+            </Link>
+
+            <Link
               href="/tracker"
               className="group rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-zinc-400 hover:shadow-md sm:col-span-2 lg:col-span-1"
             >
