@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { CompanyRunResult } from "@/lib/company/types";
 import type { ServiceConfig } from "@/lib/config/types";
 import { JobOpeningCard } from "@/app/components/job-opening-card";
@@ -23,6 +24,7 @@ import {
 type CompanyMode = "search" | "manual";
 
 export function CompanyForm() {
+  const searchParams = useSearchParams();
   const { session: resumeSession } = useResumeSession();
   const rolesRef = useRef<HTMLFieldSetElement>(null);
   const [mode, setMode] = useState<CompanyMode>("manual");
@@ -34,6 +36,25 @@ export function CompanyForm() {
   const cityOptions = locationCountry
     ? (CITIES_BY_COUNTRY[locationCountry] ?? [])
     : [];
+
+  const outreachInitial = useMemo(
+    () => ({
+      company: searchParams.get("company") ?? undefined,
+      domain: searchParams.get("domain") ?? undefined,
+      contactName: searchParams.get("name") ?? undefined,
+      contactTitle: searchParams.get("title") ?? undefined,
+      contactRole: searchParams.get("role") ?? undefined,
+      linkedin: searchParams.get("linkedin") ?? undefined,
+      email: searchParams.get("email") ?? undefined,
+    }),
+    [searchParams],
+  );
+
+  useEffect(() => {
+    if (searchParams.get("mode") === "outreach") {
+      setMode("manual");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetch("/api/config")
@@ -143,7 +164,7 @@ export function CompanyForm() {
       </div>
 
       <div className="flex flex-col gap-6">
-      {mode === "manual" && <ManualOutreachPanel />}
+      {mode === "manual" && <ManualOutreachPanel initial={outreachInitial} />}
 
       {mode === "search" && !serpapiAvailable && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

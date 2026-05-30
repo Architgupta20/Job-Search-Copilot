@@ -16,7 +16,7 @@ from app.env import (
     is_serpapi_disabled,
     serpapi_available,
 )
-from app.routers import company, jd, resume
+from app.routers import company, cover_letter, jd, resume
 from app.services.llm.client import _provider
 
 app = FastAPI(
@@ -39,6 +39,7 @@ app.add_middleware(
 app.include_router(resume.router)
 app.include_router(company.router)
 app.include_router(jd.router)
+app.include_router(cover_letter.router)
 
 
 @app.on_event("startup")

@@ -9,6 +9,7 @@ const NAV = [
   { href: "/company", label: "Company" },
   { href: "/tracker", label: "Tracker" },
   { href: "/jd", label: "JD tailor" },
+  { href: "/cover-letter", label: "Cover letter" },
 ] as const;
 
 function navClass(active: boolean) {

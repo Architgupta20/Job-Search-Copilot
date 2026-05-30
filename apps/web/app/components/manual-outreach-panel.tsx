@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type { CompanyRunResult, PersonResult } from "@/lib/company/types";
 import { buildManualPerson } from "@/lib/company/build-person";
 import { PersonCard } from "@/app/components/person-card";
@@ -9,13 +9,48 @@ import { useResumeSession } from "@/lib/resume/session";
 import { fieldInputClass, fieldLabelSmClass } from "@/lib/ui/form-styles";
 import { addApplicationFromContact } from "@/lib/tracker/storage";
 
-export function ManualOutreachPanel() {
+export type ManualOutreachInitial = {
+  company?: string;
+  domain?: string;
+  contactName?: string;
+  contactTitle?: string;
+  contactRole?: string;
+  linkedin?: string;
+  email?: string;
+};
+
+export function ManualOutreachPanel({
+  initial,
+}: {
+  initial?: ManualOutreachInitial;
+}) {
+  const prefilledRef = useRef(false);
   const { session: resumeSession } = useResumeSession();
-  const [companyName, setCompanyName] = useState("");
-  const [companyDomain, setCompanyDomain] = useState("");
+  const [companyName, setCompanyName] = useState(initial?.company ?? "");
+  const [companyDomain, setCompanyDomain] = useState(initial?.domain ?? "");
   const [people, setPeople] = useState<PersonResult[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [trackerNotice, setTrackerNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!initial || prefilledRef.current) return;
+    if (initial.company) setCompanyName(initial.company);
+    if (initial.domain) setCompanyDomain(initial.domain);
+
+    const name = initial.contactName?.trim();
+    const title = (initial.contactTitle || initial.contactRole)?.trim();
+    if (name && title && initial.company) {
+      const person = buildManualPerson({
+        name,
+        title,
+        linkedinUrl: initial.linkedin,
+        email: initial.email,
+        matchedRole: initial.contactRole,
+      });
+      setPeople([person]);
+      prefilledRef.current = true;
+    }
+  }, [initial]);
 
   function onAddPerson(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

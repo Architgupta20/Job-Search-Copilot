@@ -184,6 +184,19 @@ export function HomeFlow() {
             </Link>
 
             <Link
+              href="/cover-letter"
+              className="group rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-zinc-400 hover:shadow-md"
+            >
+              <h3 className="font-semibold text-zinc-900 group-hover:text-emerald-800">
+                Cover letter
+              </h3>
+              <p className="mt-2 text-sm text-zinc-600">
+                Generate a fact-only cover letter for a company and role, with
+                optional JD keyword alignment.
+              </p>
+            </Link>
+
+            <Link
               href="/tracker"
               className="group rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-zinc-400 hover:shadow-md sm:col-span-2 lg:col-span-1"
             >

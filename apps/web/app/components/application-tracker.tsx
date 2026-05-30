@@ -1,6 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
+import {
+  buildCompanyOutreachUrl,
+  fetchColdOutreachDraft,
+  type ColdOutreachDraft,
+} from "@/lib/outreach/draft";
+import { getResumeSession } from "@/lib/resume/session";
 import {
   APPLICATION_STATUSES,
   STATUS_LABELS,
@@ -64,6 +71,14 @@ function ApplicationRow({
   const [notes, setNotes] = useState(entry.notes);
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [followUp, setFollowUp] = useState<FollowUpDraft | null>(null);
+  const [outreachOpen, setOutreachOpen] = useState(false);
+  const [outreachLoading, setOutreachLoading] = useState(false);
+  const [outreachError, setOutreachError] = useState<string | null>(null);
+  const [outreachDraft, setOutreachDraft] = useState<ColdOutreachDraft | null>(
+    null,
+  );
+
+  const outreachUrl = buildCompanyOutreachUrl(entry);
 
   const sentAt = getOutreachSentAt(entry);
   const due = followUpSuggested(entry);
@@ -84,6 +99,38 @@ function ApplicationRow({
   function openFollowUp() {
     setFollowUp(buildFollowUpDraft(entry));
     setFollowUpOpen(true);
+  }
+
+  async function openOutreachDraft() {
+    if (outreachOpen) {
+      setOutreachOpen(false);
+      return;
+    }
+    setOutreachError(null);
+    setOutreachLoading(true);
+    setFollowUpOpen(false);
+    try {
+      const session = getResumeSession();
+      const personName = entry.contactName?.trim() || "Hiring Manager";
+      const personTitle = entry.role;
+      const draft =
+        outreachDraft ??
+        (await fetchColdOutreachDraft({
+          companyName: entry.company,
+          personName,
+          personTitle,
+          matchedRole: entry.role,
+          resumeId: session?.id ?? null,
+        }));
+      setOutreachDraft(draft);
+      setOutreachOpen(true);
+    } catch (e) {
+      setOutreachError(
+        e instanceof Error ? e.message : "Could not load outreach draft.",
+      );
+    } finally {
+      setOutreachLoading(false);
+    }
   }
 
   function onMarkEmailSent() {
@@ -180,6 +227,24 @@ function ApplicationRow({
               Log email sent
             </button>
           )}
+          <button
+            type="button"
+            onClick={openOutreachDraft}
+            disabled={outreachLoading}
+            className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-60"
+          >
+            {outreachLoading
+              ? "Loading…"
+              : outreachOpen
+                ? "Close outreach"
+                : "Draft outreach"}
+          </button>
+          <Link
+            href={outreachUrl}
+            className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50"
+          >
+            Open in Company →
+          </Link>
           {canFollowUp && (
             <button
               type="button"
@@ -212,6 +277,52 @@ function ApplicationRow({
           </button>
         </div>
       </div>
+      {outreachError && (
+        <p className="mt-3 text-sm text-red-600" role="alert">
+          {outreachError}
+        </p>
+      )}
+      {outreachOpen && outreachDraft && (
+        <div className="mt-4 rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-4">
+          <p className="text-sm font-semibold text-zinc-900">Cold outreach draft</p>
+          <p className="mt-1 text-xs text-zinc-600">
+            From your resume only. Edit before sending
+            {entry.contactName ? ` to ${entry.contactName}` : ""}.
+          </p>
+          <p className="mt-3 text-sm font-semibold text-zinc-900">
+            Subject: {outreachDraft.subject}
+          </p>
+          <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-900">
+            {outreachDraft.body}
+          </pre>
+          <p className="mt-4 text-xs font-semibold text-[#0A66C2]">LinkedIn</p>
+          <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-zinc-900">
+            {outreachDraft.linkedInMessage}
+          </pre>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-700"
+              onClick={() =>
+                navigator.clipboard.writeText(
+                  `Subject: ${outreachDraft.subject}\n\n${outreachDraft.body}`,
+                )
+              }
+            >
+              Copy email
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-[#0A66C2] px-3 py-2 text-xs font-semibold text-white hover:bg-[#004182]"
+              onClick={() =>
+                navigator.clipboard.writeText(outreachDraft.linkedInMessage)
+              }
+            >
+              Copy LinkedIn
+            </button>
+          </div>
+        </div>
+      )}
       {followUpOpen && followUp && (
         <div className="mt-4 rounded-xl border-2 border-amber-200 bg-amber-50/40 p-4">
           <p className="text-sm font-semibold text-zinc-900">Follow-up email</p>
