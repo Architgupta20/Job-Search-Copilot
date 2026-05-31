@@ -31,6 +31,7 @@ import {
 } from "@/lib/tracker/follow-up";
 import { downloadApplicationsCsv } from "@/lib/tracker/export-csv";
 import { useApplications } from "@/lib/tracker/use-applications";
+import { OutreachAgentPanel } from "@/app/components/outreach-agent-panel";
 import {
   fieldInputClass,
   fieldLabelSmClass,
@@ -462,6 +463,10 @@ export function ApplicationTracker() {
           days with no reply. Saved on this device only.
         </p>
       </div>
+
+      {ready && entries.length > 0 && (
+        <OutreachAgentPanel entries={entries} />
+      )}
 
       <form
         onSubmit={onAdd}

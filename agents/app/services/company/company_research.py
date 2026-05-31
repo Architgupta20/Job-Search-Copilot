@@ -8,23 +8,28 @@ import re
 import httpx
 
 from app.services.company.jobs import fetch_html
+from app.services.serpapi.cache import serpapi_google_search
 
 
-async def _serp_snippets(query: str, api_key: str, num: int = 6) -> list[str]:
+async def _serp_snippets(
+    client: httpx.AsyncClient,
+    query: str,
+    api_key: str,
+    num: int = 6,
+) -> list[str]:
     snippets: list[str] = []
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            res = await client.get(
-                "https://serpapi.com/search.json",
-                params={"engine": "google", "q": query, "num": num, "api_key": api_key},
-            )
-            if res.status_code != 200:
-                return snippets
-            for item in res.json().get("organic_results", []):
-                t = item.get("title") or ""
-                s = item.get("snippet") or ""
-                if t or s:
-                    snippets.append(f"{t}. {s}".strip())
+        payload, _from_cache = await serpapi_google_search(
+            client,
+            {"engine": "google", "q": query, "num": num, "api_key": api_key},
+        )
+        if not payload:
+            return snippets
+        for item in payload.get("organic_results", []):
+            t = item.get("title") or ""
+            s = item.get("snippet") or ""
+            if t or s:
+                snippets.append(f"{t}. {s}".strip())
     except Exception:
         pass
     return snippets
@@ -86,8 +91,9 @@ async def research_company_angle(
             f'"{company_name}" AI strategy OR platform OR innovation',
             f"what makes {company_name} different from competitors",
         ]
-        for q in queries:
-            blobs.extend(await _serp_snippets(q, serp_key))
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            for q in queries:
+                blobs.extend(await _serp_snippets(client, q, serp_key))
         angle = _pick_angle(company_name, blobs)
         if angle:
             source = "web_search"

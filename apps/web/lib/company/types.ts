@@ -66,6 +66,7 @@ export type CompanyRunResult = {
   jobsByRole?: Record<string, JobResult[]>;
   peoplePerRole?: number;
   resumeAttached?: boolean;
+  serpCache?: { hits: number; apiCalls: number };
   warnings: string[];
 };
 

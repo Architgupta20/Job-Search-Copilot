@@ -36,6 +36,12 @@ from app.services.company.roles import (
 )
 from app.services.jd.run import run_jd_tailor
 from app.services.resume.parser import load_resume
+from app.services.serpapi.cache import (
+    cache_enabled,
+    get_active_stats,
+    reset_active_stats,
+    serpapi_google_search,
+)
 
 USER_AGENT = "JobSearchCopilot/1.0 (local recruiter tool)"
 
@@ -263,16 +269,15 @@ async def discover_people_for_roles(
                         }
                         if serp_loc:
                             params["location"] = serp_loc
-                        res = await client.get(
-                            "https://serpapi.com/search.json",
-                            params=params,
+                        payload, _from_cache = await serpapi_google_search(
+                            client, params
                         )
-                        if res.status_code != 200:
+                        if not payload:
                             if start == 0:
                                 warnings.append(f"SerpAPI failed for role: {role}")
                             break
 
-                        batch = res.json().get("organic_results", [])
+                        batch = payload.get("organic_results", [])
                         if not batch:
                             break
 
@@ -372,6 +377,7 @@ async def run_company_search(
     location_city: str | None = None,
 ) -> dict:
     warnings: list[str] = []
+    reset_active_stats()
     company = await resolve_company(company_name)
 
     careers_url = company.get("careersUrl")
@@ -433,6 +439,18 @@ async def run_company_search(
             "Upload a resume on home to see ATS scores and tailor for each opening."
         )
 
+    serp_stats = get_active_stats()
+    if serp_stats and (serp_stats.hits or serp_stats.apiCalls):
+        if serp_stats.hits:
+            warnings.append(
+                f"SerpAPI cache: {serp_stats.hits} cached response(s), "
+                f"{serp_stats.apiCalls} live API call(s)."
+            )
+        elif cache_enabled():
+            warnings.append(
+                f"SerpAPI: {serp_stats.apiCalls} live API call(s) (cache enabled, no hits yet)."
+            )
+
     run_id = str(uuid.uuid4())
     result = {
         "runId": run_id,
@@ -444,6 +462,7 @@ async def run_company_search(
         "jobsByRole": jobs_by_role,
         "peoplePerRole": people_per_role(),
         "resumeAttached": resume_attached,
+        "serpCache": serp_stats.as_dict() if serp_stats else {"hits": 0, "apiCalls": 0},
         "warnings": list(dict.fromkeys(warnings)),
     }
     RUNS_DIR.mkdir(parents=True, exist_ok=True)

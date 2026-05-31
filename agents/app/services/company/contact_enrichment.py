@@ -13,6 +13,7 @@ import httpx
 from app.env import get_hunter_key
 from app.services.company.contact_hints import contact_lookup_hints
 from app.services.company.jobs import fetch_html
+from app.services.serpapi.cache import serpapi_google_search
 
 EMAIL_RE = re.compile(
     r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b",
@@ -191,13 +192,13 @@ async def _serp_contact_search(
     try:
         async with httpx.AsyncClient(timeout=22.0) as client:
             for q in queries[:3]:
-                res = await client.get(
-                    "https://serpapi.com/search.json",
-                    params={"engine": "google", "q": q, "num": 8, "api_key": api_key},
+                payload, _from_cache = await serpapi_google_search(
+                    client,
+                    {"engine": "google", "q": q, "num": 8, "api_key": api_key},
                 )
-                if res.status_code != 200:
+                if not payload:
                     continue
-                for item in res.json().get("organic_results", []):
+                for item in payload.get("organic_results", []):
                     blob = f"{item.get('title', '')} {item.get('snippet', '')}"
                     for email in _extract_emails_from_text(blob, d, person_name):
                         candidates.append({
