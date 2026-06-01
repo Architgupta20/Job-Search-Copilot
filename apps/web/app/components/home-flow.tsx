@@ -217,8 +217,8 @@ export function HomeFlow() {
                 Application tracker
               </h3>
               <p className="mt-2 text-sm text-zinc-600">
-                Track companies, roles, contacts, and status — saved on this
-                device.
+                Track applications and run the outreach agent for next-step
+                drafts — saved on this device.
               </p>
             </Link>
           </div>
