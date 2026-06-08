@@ -137,9 +137,9 @@ export function JobOpeningCard({ job }: { job: JobResult }) {
           <p className="text-xs text-zinc-600">
             Copy into your Word file — same as JD path. Facts only from your upload.
           </p>
-          {tailorResult.suggestedEdits?.length > 0 && (
+          {(tailorResult.suggestedEdits?.length ?? 0) > 0 && (
             <ul className="max-h-40 space-y-2 overflow-y-auto text-sm text-zinc-700">
-              {tailorResult.suggestedEdits.slice(0, 5).map((edit, i) => (
+              {(tailorResult.suggestedEdits ?? []).slice(0, 5).map((edit, i) => (
                 <li key={i} className="rounded border border-zinc-100 bg-white p-2">
                   <span className="font-medium text-emerald-800">{edit.section}:</span>{" "}
                   {edit.suggested}
