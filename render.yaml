@@ -1,0 +1,31 @@
+# Render Blueprint — deploy Python agents (FastAPI)
+# Dashboard: New → Blueprint → connect this repo, or create Web Service manually.
+#
+# Manual setup:
+#   Runtime: Docker
+#   Dockerfile path: agents/Dockerfile
+#   Docker context: . (repo root)
+#   Health check path: /health
+
+services:
+  - type: web
+    name: job-copilot-agents
+    runtime: docker
+    dockerfilePath: ./agents/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SERPAPI_API_KEY
+        sync: false
+      - key: HUNTER_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+    disk:
+      name: copilot-data
+      mountPath: /app/data
+      sizeGB: 1

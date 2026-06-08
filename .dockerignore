@@ -1,0 +1,12 @@
+.git
+.gitignore
+node_modules
+apps/web/node_modules
+apps/web/.next
+data
+**/__pycache__
+**/*.pyc
+.env
+apps/web/.env
+*.md
+.cursor

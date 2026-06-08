@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.env import (
     WEB_ENV_FILE,
+    get_cors_origins,
     get_env_path,
     get_groq_key,
     get_hunter_key,
@@ -28,10 +29,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,14 +50,21 @@ def startup_log_env():
     print(f"[agents] env file: {path or 'MISSING — create apps/web/.env'}")
     print(f"[agents] LLM_PROVIDER: {get_llm_provider() or '(not set)'}")
     print(f"[agents] GROQ_API_KEY loaded: {bool(key)} (length {len(key)})")
+    origins = get_cors_origins()
+    print(f"[agents] CORS origins ({len(origins)}): {', '.join(origins)}")
 
 
 @app.get("/health")
 def health():
+    origins = get_cors_origins()
     return {
         "status": "ok",
         "service": "agents",
         "envFile": str(WEB_ENV_FILE) if WEB_ENV_FILE.is_file() else None,
+        "cors": {
+            "originCount": len(origins),
+            "productionConfigured": len(origins) > 2,
+        },
     }
 
 

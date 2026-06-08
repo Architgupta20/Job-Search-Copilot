@@ -28,7 +28,13 @@ _KEYS_FROM_WEB_ENV = frozenset(
         "SERPAPI_API_KEY",
         "SERPAPI_DISABLED",
         "HUNTER_API_KEY",
+        "ALLOWED_ORIGINS",
     }
+)
+
+_DEFAULT_CORS_ORIGINS = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 )
 
 
@@ -104,6 +110,22 @@ def is_serpapi_disabled() -> bool:
 
 def serpapi_available() -> bool:
     return bool(get_serpapi_key()) and not is_serpapi_disabled()
+
+
+def get_cors_origins() -> list[str]:
+    """
+    CORS allowlist for browser calls to agents.
+    Local dev origins are always included; set ALLOWED_ORIGINS for production
+    (comma-separated), e.g. https://your-app.vercel.app
+    """
+    raw = _clean(os.environ.get("ALLOWED_ORIGINS"))
+    extra: list[str] = []
+    if raw:
+        for part in raw.split(","):
+            origin = part.strip().rstrip("/")
+            if origin:
+                extra.append(origin)
+    return list(dict.fromkeys([*_DEFAULT_CORS_ORIGINS, *extra]))
 
 
 # Load on import
