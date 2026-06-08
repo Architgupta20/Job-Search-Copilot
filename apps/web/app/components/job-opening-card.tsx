@@ -18,7 +18,7 @@ export function JobOpeningCard({ job }: { job: JobResult }) {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState("");
 
-  const session = useResumeSession();
+  const { session } = useResumeSession();
   const hasAts = job.atsScorePercent != null;
 
   async function tailorForJob() {
