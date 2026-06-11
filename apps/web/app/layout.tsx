@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Job Search Copilot",
   description:
-    "Upload a resume, search companies for contacts and jobs, or tailor to a JD.",
+    "Upload a resume, search companies for contacts and jobs, tailor to a JD, and prep for interviews.",
 };
 
 export default function RootLayout({
