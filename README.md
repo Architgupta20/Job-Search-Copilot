@@ -4,7 +4,8 @@ Local-first recruiter tool. Upload a resume once, then **search a company** (Lin
 
 Runs at **http://localhost:3000**. Data stays in local `data/` (gitignored).
 
-**Repo:** https://github.com/Architgupta20/Job-Search-Copilot
+**Repo:** https://github.com/Architgupta20/Job-Search-Copilot  
+**Live site:** https://job-search-copilot-seven.vercel.app/ (frontend on Vercel; Python agents pending Render)
 
 ---
 
