@@ -85,14 +85,14 @@ export function HomeFlow() {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8">
       <header className="space-y-2 text-center sm:text-left">
         <p className="text-sm font-medium uppercase tracking-wide text-emerald-700">
-          Local recruiter tool
+          Recruiter demo tool
         </p>
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">
           Job Search Copilot
         </h1>
         <p className="text-zinc-600">
-          Upload your resume each time you open the app (this tab). Then find
-          contacts and jobs at a company—or tailor to a job description.
+          Upload your resume to start. Then search a company for contacts and
+          jobs, or tailor your resume to a job description.
         </p>
       </header>
 
@@ -103,6 +103,7 @@ export function HomeFlow() {
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
             DOCX recommended for best download formatting. PDF also supported.
+            Max 10 MB.
           </p>
 
           <input

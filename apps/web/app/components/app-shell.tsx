@@ -34,33 +34,53 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             Job Search Copilot
           </Link>
           <nav className="flex flex-wrap items-center gap-4 text-sm">
-            {NAV.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={navClass(
-                  href === "/" ? pathname === "/" : pathname.startsWith(href),
-                )}
-              >
-                {label}
-              </Link>
-            ))}
+            {NAV.map(({ href, label }) => {
+              const active =
+                href === "/" ? pathname === "/" : pathname.startsWith(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={navClass(active)}
+                >
+                  {label}
+                </Link>
+              );
+            })}
           </nav>
           {!ready ? (
             <p className="text-xs text-zinc-400">Checking resume…</p>
           ) : session ? (
             <p
-              className="max-w-[12rem] truncate text-xs text-zinc-500"
+              className="max-w-[12rem] truncate rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800"
               title={session.fileName}
             >
-              Resume: {session.fileName}
+              {session.fileName}
             </p>
           ) : (
-            <p className="text-xs text-zinc-400">No resume</p>
+            <Link
+              href="/"
+              className="text-xs text-zinc-400 underline-offset-2 hover:text-emerald-700 hover:underline"
+            >
+              Upload resume
+            </Link>
           )}
         </div>
       </header>
       <main className="flex-1 px-4 py-10">{children}</main>
+      <footer className="border-t border-zinc-200 bg-white px-4 py-4 text-center text-xs text-zinc-500">
+        <a
+          href="https://job-search-copilot-seven.vercel.app/"
+          className="hover:text-emerald-700 hover:underline"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Live demo
+        </a>
+        <span className="mx-2 text-zinc-300">·</span>
+        <span>Upload a resume to unlock tailoring and outreach</span>
+      </footer>
     </div>
   );
 }
